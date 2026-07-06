@@ -1,0 +1,11 @@
+id,competitor,product_category,product_name,specification,price,unit_price,title,content,source,publish_time,url,dimension
+comp001,盒马,meat,猪五花肉,500g,29.9,59.8元/kg,盒马猪肉不新鲜投诉,消费者投诉盒马猪五花肉有异味申请退款,黑猫投诉公开样例,2026-07-01,https://manual.local/complaint/comp001,sentiment
+comp002,叮咚买菜,egg,土鸡蛋,20枚,28.8,1.44元/枚,叮咚买菜鸡蛋破损,消费者反馈鸡蛋配送破损6枚售后处理较慢,黑猫投诉公开样例,2026-07-01,https://manual.local/complaint/comp002,sentiment
+comp003,美团买菜,dairy,鲜牛奶,950ml,14.9,15.68元/L,美团买菜牛奶临期争议,用户投诉收到临近保质期鲜牛奶并要求退货,黑猫投诉公开样例,2026-07-02,https://manual.local/complaint/comp003,sentiment
+comp004,京东七鲜,aquatic,鲜虾,500g,36.9,73.8元/kg,京东七鲜鲜虾缺斤少两,消费者称鲜虾实收重量低于页面标注,黑猫投诉公开样例,2026-07-02,https://manual.local/complaint/comp004,sentiment
+comp005,永辉生活,vegetable,白菜,1kg,3.8,3.8元/kg,永辉生活白菜黄叶较多,用户投诉白菜黄叶较多影响食用体验,黑猫投诉公开样例,2026-07-03,https://manual.local/complaint/comp005,sentiment
+comp006,山姆会员店,fruit,草莓,1kg,69.9,69.9元/kg,山姆草莓部分压坏,消费者反馈草莓大包装底层压坏且售后沟通慢,黑猫投诉公开样例,2026-07-03,https://manual.local/complaint/comp006,sentiment
+comp007,京东生鲜,fruit,葡萄,1kg,19.9,19.9元/kg,京东生鲜葡萄变质投诉,用户投诉葡萄到货后部分变质要求退款,黑猫投诉公开样例,2026-07-04,https://manual.local/complaint/comp007,sentiment
+comp008,朴朴超市,vegetable,黄瓜,500g,4.6,9.2元/kg,朴朴超市黄瓜价格虚高争议,用户认为朴朴黄瓜价格高于附近商超且无明显品质差异,黑猫投诉公开样例,2026-07-04,https://manual.local/complaint/comp008,sentiment
+comp009,盒马,prepared_food,预制菜套餐,2人份,39.9,19.95元/份,盒马预制菜包装破损,消费者反馈预制菜外包装破损影响冷链安全感,黑猫投诉公开样例,2026-07-05,https://manual.local/complaint/comp009,sentiment
+comp010,叮咚买菜,fruit,橙子,1kg,13.9,13.9元/kg,叮咚买菜橙子售后差,用户投诉橙子口感差但售后只退部分金额,黑猫投诉公开样例,2026-07-05,https://manual.local/complaint/comp010,sentiment

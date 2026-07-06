@@ -1,0 +1,11 @@
+id,competitor,product_category,product_name,specification,price,unit_price,title,content,source,publish_time,url,dimension
+jd001,京东生鲜,meat,黑猪五花肉,500g,31.9,63.8元/kg,京东生鲜黑猪五花肉上架,京东生鲜黑猪五花肉主打冷链到家价格略高,手工公开样例,2026-07-01,https://manual.local/jd/price/jd001,new_product
+jd002,京东生鲜,meat,牛腱子,1kg,86.0,86.0元/kg,京东生鲜牛腱子家庭装,牛腱子1kg装参与plus会员满减,手工公开样例,2026-07-01,https://manual.local/jd/price/jd002,price
+jd003,京东生鲜,meat,鸡翅中,500g,29.8,59.6元/kg,京东生鲜鸡翅中价格稳定,鸡翅中价格与上周持平,手工公开样例,2026-07-02,https://manual.local/jd/price/jd003,price
+jd004,京东生鲜,egg,鲜鸡蛋,30枚,24.5,0.82元/枚,京东生鲜鲜鸡蛋Plus价,鲜鸡蛋Plus价24.5元略高于美团买菜,手工公开样例,2026-07-02,https://manual.local/jd/price/jd004,price
+jd005,京东生鲜,dairy,纯牛奶,12盒,49.9,4.16元/盒,京东生鲜纯牛奶箱装促销,纯牛奶12盒装满99减20适合囤货,手工公开样例,2026-07-03,https://manual.local/jd/price/jd005,price
+jd006,京东生鲜,vegetable,番茄,1kg,9.9,9.9元/kg,京东生鲜番茄产地仓发货,番茄产地仓发货价格低于盒马同日,手工公开样例,2026-07-03,https://manual.local/jd/price/jd006,price
+jd007,京东生鲜,vegetable,洋葱,1kg,5.9,5.9元/kg,京东生鲜洋葱价格稳定,洋葱1kg装保持低价库存充足,手工公开样例,2026-07-04,https://manual.local/jd/price/jd007,price
+jd008,京东生鲜,fruit,苹果,2kg,25.8,12.9元/kg,京东生鲜苹果礼盒预热,苹果2kg礼盒进入年货预热频道,手工公开样例,2026-07-04,https://manual.local/jd/price/jd008,new_product
+jd009,京东生鲜,fruit,葡萄,1kg,19.9,19.9元/kg,京东生鲜葡萄满减,葡萄1kg装参与水果满69减10,手工公开样例,2026-07-05,https://manual.local/jd/price/jd009,price
+jd010,京东生鲜,aquatic,鲜虾,1kg,76.0,76.0元/kg,京东生鲜鲜虾冷链促销,鲜虾1kg装plus会员价76元,手工公开样例,2026-07-05,https://manual.local/jd/price/jd010,price

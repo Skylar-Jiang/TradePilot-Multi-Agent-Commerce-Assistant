@@ -1,0 +1,11 @@
+id,competitor,product_category,product_name,specification,price,unit_price,title,content,source,publish_time,url,dimension
+dd001,叮咚买菜,meat,猪肉片,400g,21.9,54.75元/kg,叮咚买菜猪肉片降价,叮咚买菜猪肉片较上周下调2元并参与满59减8,手工公开样例,2026-07-01,https://manual.local/dingdong/price/dd001,price
+dd002,叮咚买菜,meat,牛肉卷,300g,35.9,119.67元/kg,叮咚买菜牛肉卷火锅场景促销,牛肉卷搭配蔬菜组合购买享会员价,手工公开样例,2026-07-01,https://manual.local/dingdong/price/dd002,price
+dd003,叮咚买菜,meat,鸡腿肉,500g,18.8,37.6元/kg,叮咚买菜鸡腿肉稳定供应,鸡腿肉价格保持稳定并标注次日达,手工公开样例,2026-07-02,https://manual.local/dingdong/price/dd003,price
+dd004,叮咚买菜,egg,土鸡蛋,20枚,28.8,1.44元/枚,叮咚买菜土鸡蛋价格偏高,土鸡蛋20枚装单枚价格高于普通鲜鸡蛋,手工公开样例,2026-07-02,https://manual.local/dingdong/price/dd004,price
+dd005,叮咚买菜,dairy,酸奶,8杯,19.9,2.49元/杯,叮咚买菜酸奶组合促销,酸奶8杯装第二件半价拉动奶类复购,手工公开样例,2026-07-03,https://manual.local/dingdong/price/dd005,price
+dd006,叮咚买菜,vegetable,白菜,1kg,3.6,3.6元/kg,叮咚买菜白菜低价引流,白菜1kg装价格低于多数平台适合引流,手工公开样例,2026-07-03,https://manual.local/dingdong/price/dd006,price
+dd007,叮咚买菜,vegetable,青菜,500g,4.2,8.4元/kg,叮咚买菜青菜早市价,青菜早市价4.2元每500g中午后恢复原价,手工公开样例,2026-07-04,https://manual.local/dingdong/price/dd007,price
+dd008,叮咚买菜,fruit,香蕉,1kg,8.9,8.9元/kg,叮咚买菜香蕉家庭装,香蕉家庭装价格较盒马低但品相反馈分化,手工公开样例,2026-07-04,https://manual.local/dingdong/price/dd008,price
+dd009,叮咚买菜,fruit,橙子,1kg,13.9,13.9元/kg,叮咚买菜橙子产地直发,橙子产地直发主打高甜度并参与新人券,手工公开样例,2026-07-05,https://manual.local/dingdong/price/dd009,new_product
+dd010,叮咚买菜,aquatic,鲈鱼,600g,32.8,54.67元/kg,叮咚买菜鲈鱼价格波动,鲈鱼受水产到货量影响上涨3元,手工公开样例,2026-07-05,https://manual.local/dingdong/price/dd010,price

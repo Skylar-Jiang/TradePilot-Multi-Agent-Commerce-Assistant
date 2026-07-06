@@ -1,0 +1,11 @@
+id,competitor,product_category,product_name,specification,price,unit_price,title,content,source,publish_time,url,dimension
+social001,盒马,fruit,草莓,300g,29.9,99.67元/kg,用户反馈盒马草莓不够甜,公开笔记反馈盒马草莓外观好但甜度不稳定,小红书公开样例,2026-07-01,https://manual.local/social/social001,sentiment
+social002,叮咚买菜,vegetable,青菜,500g,4.2,8.4元/kg,用户称叮咚青菜有黄叶,公开评价称叮咚买菜青菜偶有黄叶但售后退款较快,知乎公开样例,2026-07-01,https://manual.local/social/social002,sentiment
+social003,美团买菜,egg,鲜鸡蛋,30枚,22.8,0.76元/枚,美团买菜鸡蛋价格有优势,公开讨论认为美团买菜鸡蛋补贴后价格低但库存波动大,微博公开样例,2026-07-02,https://manual.local/social/social003,price
+social004,京东七鲜,aquatic,鲜虾,500g,36.9,73.8元/kg,七鲜鲜虾包装破损反馈,公开评价反馈鲜虾配送包装破损影响体验,应用商店公开样例,2026-07-02,https://manual.local/social/social004,sentiment
+social005,永辉生活,dairy,鲜牛奶,950ml,13.9,14.63元/L,永辉鲜牛奶早市价受关注,公开帖子称永辉鲜牛奶早市价便宜但需要早下单,小红书公开样例,2026-07-03,https://manual.local/social/social005,price
+social006,山姆会员店,meat,牛肉,1kg,88.0,88.0元/kg,山姆牛肉大包装评价分化,公开问答认为山姆牛肉品质稳定但单次购买量大,知乎公开样例,2026-07-03,https://manual.local/social/social006,sentiment
+social007,京东生鲜,fruit,苹果,2kg,25.8,12.9元/kg,京东生鲜苹果礼盒评价,用户反馈苹果礼盒包装好但个别果有磕碰,应用商店公开样例,2026-07-04,https://manual.local/social/social007,sentiment
+social008,盒马,vegetable,番茄,500g,5.9,11.8元/kg,盒马番茄价格偏高讨论,公开讨论认为盒马番茄品质较好但价格高于社区店,微博公开样例,2026-07-04,https://manual.local/social/social008,sentiment
+social009,叮咚买菜,aquatic,鲈鱼,600g,32.8,54.67元/kg,叮咚买菜鲈鱼配送慢,用户反馈水产订单高峰期配送慢导致烹饪计划延后,小红书公开样例,2026-07-05,https://manual.local/social/social009,sentiment
+social010,美团买菜,vegetable,土豆,1kg,4.9,4.9元/kg,美团买菜土豆低价好评,公开评价认为土豆价格稳定适合家庭囤货,知乎公开样例,2026-07-05,https://manual.local/social/social010,price

@@ -1,0 +1,12 @@
+[
+  {
+    "schedule_id": "hema_weekly_fresh_report",
+    "competitor": "盒马",
+    "period": "weekly",
+    "question": "请生成盒马肉蛋奶、基础蔬菜、水果价格与舆情周报",
+    "enabled": true,
+    "last_run_at": "",
+    "next_run_at": "",
+    "created_at": "2026-07-06T00:00:00+00:00"
+  }
+]

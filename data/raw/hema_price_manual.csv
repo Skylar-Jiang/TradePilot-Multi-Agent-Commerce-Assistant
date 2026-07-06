@@ -1,0 +1,11 @@
+id,competitor,product_category,product_name,specification,price,unit_price,title,content,source,publish_time,url,dimension
+hema001,盒马,meat,猪五花肉,500g,29.9,59.8元/kg,盒马猪五花肉会员价下调,盒马鲜生上海门店猪五花肉会员价较上周下降3元每500g,手工公开样例,2026-07-01,https://manual.local/hema/price/hema001,price
+hema002,盒马,meat,牛腩块,500g,48.8,97.6元/kg,盒马牛腩块稳定供应,盒马牛腩块维持48.8元每500g并标注冷链直采,手工公开样例,2026-07-01,https://manual.local/hema/price/hema002,price
+hema003,盒马,meat,鸡胸肉,500g,16.9,33.8元/kg,盒马鸡胸肉工作日晚间促销,盒马鸡胸肉晚间时段第二件8折,手工公开样例,2026-07-02,https://manual.local/hema/price/hema003,price
+hema004,盒马,egg,鲜鸡蛋,30枚,23.9,0.80元/枚,盒马鲜鸡蛋会员价,盒马鲜鸡蛋30枚装会员价23.9元,手工公开样例,2026-07-02,https://manual.local/hema/price/hema004,price
+hema005,盒马,dairy,鲜牛奶,950ml,15.8,16.63元/L,盒马低温鲜牛奶促销,盒马鲜牛奶买二减4元适合家庭囤货,手工公开样例,2026-07-03,https://manual.local/hema/price/hema005,price
+hema006,盒马,vegetable,番茄,500g,5.9,11.8元/kg,盒马番茄价格小幅上涨,盒马番茄因产地雨水影响上涨0.8元每500g,手工公开样例,2026-07-03,https://manual.local/hema/price/hema006,price
+hema007,盒马,vegetable,黄瓜,500g,4.5,9.0元/kg,盒马黄瓜产地直采,盒马黄瓜标注山东产地直采价格4.5元每500g,手工公开样例,2026-07-04,https://manual.local/hema/price/hema007,price
+hema008,盒马,fruit,苹果,1kg,12.8,12.8元/kg,盒马苹果家庭装上架,盒马苹果1kg家庭装较单果购买单价更低,手工公开样例,2026-07-04,https://manual.local/hema/price/hema008,price
+hema009,盒马,fruit,草莓,300g,29.9,99.67元/kg,盒马草莓季节令上架,盒马草莓季新品上架主打产地新鲜,手工公开样例,2026-07-05,https://manual.local/hema/price/hema009,new_product
+hema010,盒马,aquatic,鲜虾,500g,39.9,79.8元/kg,盒马鲜虾限时秒杀,盒马鲜虾周末秒杀较日常价低5元,手工公开样例,2026-07-05,https://manual.local/hema/price/hema010,price
