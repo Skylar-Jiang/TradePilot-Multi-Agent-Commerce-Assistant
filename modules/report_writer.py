@@ -25,20 +25,20 @@ def append_items(lines: list[str], value: Any) -> None:
 
 def render_markdown_report(report: dict[str, Any]) -> str:
     lines = [
-        f"# {report.get('title', '生鲜电商竞品动态追踪与价格舆情分析报告')}",
+        f"# {report.get('title', '生鲜批发采购区域供应源竞品动态追踪与智能对标分析报告')}",
         "",
         "## 1. 执行摘要",
         report.get("executive_summary", ""),
         "",
-        "## 2. 生鲜平台动态汇总",
+        "## 2. 区域供应源动态汇总",
     ]
     append_items(lines, report.get("platform_updates", report.get("key_findings", [])))
     sections = [
         ("## 3. 肉蛋奶价格对比", report.get("meat_egg_dairy_price_comparison", "")),
         ("## 4. 基础蔬菜价格对比", report.get("vegetable_price_comparison", "")),
         ("## 5. 水果价格对比", report.get("fruit_price_comparison", "")),
-        ("## 6. 促销与新品/节令商品分析", report.get("promotion_and_seasonal_products", "")),
-        ("## 7. 负面舆情与服务风险", report.get("sentiment_and_service_risks", "")),
+        ("## 6. 新产季与供应动态分析", report.get("promotion_and_seasonal_products", "")),
+        ("## 7. 质量监管与供应风险", report.get("sentiment_and_service_risks", "")),
         ("## 8. 时序价格趋势", report.get("time_series_price_trend", "")),
         ("## 9. 机会与威胁研判", report.get("opportunity_threat_judgement", "")),
     ]

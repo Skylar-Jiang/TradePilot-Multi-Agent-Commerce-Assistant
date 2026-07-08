@@ -87,7 +87,7 @@ def build_content_from_fresh_row(row: dict[str, Any]) -> str:
     if "product_name" not in row:
         return ""
     parts = [
-        f"竞品平台：{row.get('competitor', '')}",
+        f"区域供应源竞品：{row.get('competitor', '')}",
         f"商品类别：{row.get('product_category', '')}",
         f"商品名称：{row.get('product_name', '')}",
         f"规格：{row.get('specification', '')}",

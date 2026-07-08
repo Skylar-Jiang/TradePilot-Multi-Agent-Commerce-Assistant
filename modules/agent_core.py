@@ -104,7 +104,7 @@ class PriceMonitorAgent(BaseAgent):
     prompt = PRICE_MONITOR_PROMPT
 
     def build_query(self, competitor: str, question: str) -> str:
-        return f"{competitor} 价格 套餐 折扣 补贴 促销 降价 {question}"
+        return f"{competitor} 批发价 到货价 产地价 市场价 价差 波动 异常价差 采购优势 {question}"
 
 
 @register_agent
@@ -114,7 +114,7 @@ class NewProductAgent(BaseAgent):
     prompt = NEW_PRODUCT_PROMPT
 
     def build_query(self, competitor: str, question: str) -> str:
-        return f"{competitor} 新品 发布 版本 功能 更新 服务升级 {question}"
+        return f"{competitor} 新产季 新品种 新产区 新规格 新批次 上市 到货 供应 {question}"
 
 
 @register_agent
@@ -124,7 +124,7 @@ class SentimentAgent(BaseAgent):
     prompt = SENTIMENT_ANALYSIS_PROMPT
 
     def build_query(self, competitor: str, question: str) -> str:
-        return f"{competitor} 投诉 差评 负面 舆情 风险 媒体报道 {question}"
+        return f"{competitor} 抽检 食品安全 质量风险 供应短缺 天气 物流 监管通报 舆情 风险 {question}"
 
 
 class AgentOrchestrator:

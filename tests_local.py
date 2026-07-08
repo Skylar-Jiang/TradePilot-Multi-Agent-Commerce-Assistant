@@ -56,17 +56,17 @@ def with_test_rag_embedding(func):
 
 def test_data_and_rag():
     def run():
-        records = load_csv("data/raw/hema_price_manual.csv")
+        records = load_csv("data/raw/shouguang_cucumber_manual.csv")
         assert len(records) >= 3
         assert all(record.source_url for record in records)
 
-        result = ingest_csv_tool("data/raw/hema_price_manual.csv")
+        result = ingest_csv_tool("data/raw/shouguang_cucumber_manual.csv")
         assert result["count"] >= 3
 
         index = build_project_index()
         assert len(index.chunks) >= 6
 
-        evidence = retrieve_evidence_tool("盒马 鸡蛋 牛奶 番茄 价格", competitor="盒马", top_k=3)
+        evidence = retrieve_evidence_tool("山东寿光黄瓜 黄瓜 批发价 到货价 价差", competitor="山东寿光黄瓜", top_k=3)
         assert evidence
         assert evidence[0]["source_url"]
 
@@ -119,23 +119,26 @@ def test_deepseek_env_fallback_is_openai_compatible():
 
 def test_conversation_memory_records_turns():
     memory = ConversationMemory()
-    memory.add_user_message("分析盒马价格变化")
+    memory.add_user_message("分析山东寿光黄瓜价格变化")
     memory.add_ai_message("已记录价格分析结果")
     messages = memory.get_all_messages()
     assert messages == [
-        {"role": "user", "content": "分析盒马价格变化"},
+        {"role": "user", "content": "分析山东寿光黄瓜价格变化"},
         {"role": "assistant", "content": "已记录价格分析结果"},
     ]
 
 
 def test_collection_and_dashboard():
-    sources = load_sources()
-    assert sources
-    job = run_collection_job(force=True, use_llm_filter=False)
-    assert job["source_count"] >= 1
-    assert competitor_summary()
-    assert comparison_data()["dimensions"] == ["price", "new_product", "sentiment"]
-    assert isinstance(risk_tags_view(), list)
+    def run():
+        sources = load_sources()
+        assert sources
+        job = run_collection_job(force=True, use_llm_filter=False)
+        assert job["source_count"] >= 1
+        assert competitor_summary()
+        assert comparison_data()["dimensions"] == ["price", "new_product", "sentiment"]
+        assert isinstance(risk_tags_view(), list)
+
+    with_test_rag_embedding(run)
 
 
 def test_agents_registered():
@@ -162,13 +165,13 @@ def test_skills_mock_provider():
         result = run_skill(
             "orchestrator_skill",
             {
-                "competitor": "盒马",
-                "query": "分析盒马近期肉蛋奶和基础蔬菜的价格变化、促销活动和负面舆情",
+                "competitor": "山东寿光黄瓜",
+                "query": "分析山东寿光黄瓜相对河北黄瓜和辽宁批发市场黄瓜的批发价波动、异常价差、新批次供应和质量风险",
                 "top_k": 2,
                 "provider": "mock",
             },
         )
-        assert result["competitor"] == "盒马"
+        assert result["competitor"] == "山东寿光黄瓜"
         assert "analysis_result" in result
         assert "insufficient_evidence" in result
 

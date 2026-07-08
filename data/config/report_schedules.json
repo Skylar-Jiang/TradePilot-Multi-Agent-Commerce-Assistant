@@ -1,9 +1,9 @@
 [
   {
-    "schedule_id": "hema_weekly_fresh_report",
-    "competitor": "盒马",
+    "schedule_id": "shouguang_cucumber_weekly_report",
+    "competitor": "山东寿光黄瓜",
     "period": "weekly",
-    "question": "请生成盒马肉蛋奶、基础蔬菜、水果价格与舆情周报",
+    "question": "请生成山东寿光黄瓜相对河北黄瓜和辽宁批发市场黄瓜的批发价、供应动态与质量风险周报",
     "enabled": true,
     "last_run_at": "",
     "next_run_at": "",

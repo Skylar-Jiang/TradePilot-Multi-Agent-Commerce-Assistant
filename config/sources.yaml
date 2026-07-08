@@ -1,48 +1,39 @@
 project:
-  name: "生鲜电商竞品动态追踪与价格舆情分析系统"
-  scenario: "fresh_ecommerce"
-  description: "面向盒马、叮咚买菜、美团买菜、朴朴超市等平台，监控肉蛋奶、基础蔬菜、水果等生鲜商品的价格波动、促销变化、新品上架和负面舆情。"
+  name: "生鲜批发采购区域供应源竞品动态追踪与智能对标分析系统"
+  scenario: "fresh_wholesale_procurement"
+  description: "面向生鲜批发商、采购商和供应链人员，监控不同产区、批发市场和供应渠道提供的同类生鲜商品的价格波动、区域价差、供应动态、质量风险和监管舆情。"
 
 competitors:
-  - name: "盒马"
-    keywords: ["盒马", "盒马鲜生", "盒马生鲜", "盒马价格", "盒马促销"]
-  - name: "叮咚买菜"
-    keywords: ["叮咚买菜", "叮咚", "叮咚生鲜", "叮咚买菜价格"]
-  - name: "美团买菜"
-    keywords: ["美团买菜", "美团生鲜", "美团优选", "美团买菜价格"]
-  - name: "朴朴超市"
-    keywords: ["朴朴超市", "朴朴", "朴朴生鲜", "朴朴价格"]
-  - name: "京东七鲜"
-    keywords: ["京东七鲜", "七鲜", "7FRESH", "京东生鲜"]
-  - name: "永辉生活"
-    keywords: ["永辉生活", "永辉超市", "永辉生鲜"]
-  - name: "山姆会员店"
-    keywords: ["山姆", "山姆会员店", "山姆生鲜"]
-  - name: "京东生鲜"
-    keywords: ["京东生鲜", "京东买菜", "京东超市生鲜"]
+  - name: "山东寿光黄瓜"
+    keywords: ["山东寿光黄瓜", "寿光黄瓜", "寿光产区", "黄瓜批发价", "黄瓜到货价"]
+  - name: "河北黄瓜"
+    keywords: ["河北黄瓜", "河北产区", "黄瓜行情", "黄瓜价差"]
+  - name: "辽宁批发市场黄瓜"
+    keywords: ["辽宁批发市场黄瓜", "辽宁黄瓜", "东北黄瓜", "批发市场黄瓜"]
+  - name: "华北鸡蛋供应源"
+    keywords: ["华北鸡蛋", "鸡蛋批发价", "鸡蛋到货价", "鸡蛋供应"]
+  - name: "东北猪肉供应渠道"
+    keywords: ["东北猪肉", "猪肉批发价", "猪肉供应", "冷链物流"]
 
 product_categories:
   meat:
     name: "肉类"
-    keywords: ["猪肉", "牛肉", "鸡肉", "五花肉", "排骨", "鸡胸肉"]
+    keywords: ["猪肉", "牛肉", "鸡肉", "白条猪", "猪肉批发价"]
   egg:
     name: "蛋类"
-    keywords: ["鸡蛋", "土鸡蛋", "鲜鸡蛋", "鸡蛋价格"]
+    keywords: ["鸡蛋", "鲜鸡蛋", "鸡蛋批发价", "鸡蛋到货价"]
   dairy:
     name: "奶类"
-    keywords: ["鲜牛奶", "纯牛奶", "酸奶", "低温奶", "牛奶价格"]
+    keywords: ["鲜牛奶", "低温奶", "奶源供应", "乳品批发价"]
   vegetable:
     name: "基础蔬菜"
-    keywords: ["白菜", "土豆", "番茄", "西红柿", "黄瓜", "青菜", "菠菜", "胡萝卜", "洋葱"]
+    keywords: ["白菜", "土豆", "番茄", "西红柿", "黄瓜", "青菜", "菠菜", "胡萝卜", "洋葱", "蔬菜批发价"]
   fruit:
     name: "水果"
-    keywords: ["苹果", "香蕉", "橙子", "草莓", "葡萄", "水果价格"]
+    keywords: ["苹果", "香蕉", "橙子", "草莓", "葡萄", "水果批发价", "产季"]
   aquatic:
     name: "水产"
     keywords: ["虾", "鱼", "带鱼", "鲈鱼", "水产"]
-  prepared_food:
-    name: "预制菜"
-    keywords: ["预制菜", "冷冻水饺", "半成品菜", "即食套餐"]
 
 sources:
   - id: agri_price_public
@@ -57,71 +48,39 @@ sources:
     url: "https://cif.mofcom.gov.cn/"
     dimension: "price"
     enabled: true
-  - id: jiemian_hema_price_war
-    type: html
-    name: "界面新闻盒马生鲜价格战公开报道"
-    url: "https://www.jiemian.com/article/6918702.html"
-    competitor: "盒马"
-    dimension: "market"
-    priority: 3
-    frequency_minutes: 10080
-    keywords: ["盒马", "生鲜", "价格战", "叮咚买菜", "京东7FRESH"]
-    enabled: true
-  - id: kr36_dingdong_fresh_supply
-    type: html
-    name: "36氪叮咚买菜生鲜供应链公开报道"
-    url: "https://m.36kr.com/p/3310788097269506"
-    competitor: "叮咚买菜"
-    dimension: "market"
-    priority: 4
-    frequency_minutes: 10080
-    keywords: ["叮咚买菜", "生鲜", "前置仓", "供应链", "履约"]
-    enabled: true
-  - id: jd_fresh_manual
+  - id: shouguang_cucumber_manual
     type: manual_csv
-    name: "京东生鲜价格手工样例"
-    file: "data/raw/jd_fresh_manual.csv"
+    name: "山东寿光黄瓜批发价手工样例"
+    file: "data/raw/shouguang_cucumber_manual.csv"
     dimension: "price"
     enabled: true
-  - id: hema_price_manual
+  - id: hebei_cucumber_manual
     type: manual_csv
-    name: "盒马价格手工样例"
-    file: "data/raw/hema_price_manual.csv"
+    name: "河北黄瓜批发价手工样例"
+    file: "data/raw/hebei_cucumber_manual.csv"
     dimension: "price"
     enabled: true
-  - id: dingdong_price_manual
+  - id: liaoning_market_cucumber_manual
     type: manual_csv
-    name: "叮咚买菜价格手工样例"
-    file: "data/raw/dingdong_price_manual.csv"
+    name: "辽宁批发市场黄瓜手工样例"
+    file: "data/raw/liaoning_market_cucumber_manual.csv"
     dimension: "price"
     enabled: true
-  - id: meituan_price_manual
+  - id: wholesale_supply_update_manual
     type: manual_csv
-    name: "美团买菜价格手工样例"
-    file: "data/raw/meituan_price_manual.csv"
-    dimension: "price"
-    enabled: true
-  - id: fresh_promotion_manual
-    type: manual_csv
-    name: "生鲜促销活动样例"
-    file: "data/raw/fresh_promotion_manual.csv"
-    dimension: "price"
-    enabled: true
-  - id: fresh_news_manual
-    type: manual_csv
-    name: "生鲜行业新闻样例"
-    file: "data/raw/fresh_news_manual.csv"
+    name: "新产季与供应动态手工样例"
+    file: "data/raw/wholesale_supply_update_manual.csv"
     dimension: "market"
     enabled: true
-  - id: fresh_social_manual
+  - id: wholesale_risk_manual
     type: manual_csv
-    name: "生鲜社交舆情样例"
-    file: "data/raw/fresh_social_manual.csv"
+    name: "质量监管与供应风险手工样例"
+    file: "data/raw/wholesale_risk_manual.csv"
     dimension: "sentiment"
     enabled: true
-  - id: fresh_complaint_manual
+  - id: wholesale_logistics_weather_manual
     type: manual_csv
-    name: "生鲜投诉舆情样例"
-    file: "data/raw/fresh_complaint_manual.csv"
-    dimension: "sentiment"
+    name: "天气物流影响手工样例"
+    file: "data/raw/wholesale_logistics_weather_manual.csv"
+    dimension: "market"
     enabled: true

@@ -37,8 +37,8 @@ from modules.tools import add_manual_record_tool, ingest_csv_tool, retrieve_evid
 load_dotenv()
 
 app = FastAPI(
-    title="生鲜电商竞品动态追踪与价格舆情分析系统",
-    description="面向生鲜电商的 Skill + Agent + RAG + 报告生成 API。",
+    title="生鲜批发采购区域供应源竞品动态追踪与智能对标分析系统",
+    description="面向生鲜批发采购场景的区域供应源 Skill + Agent + RAG + 报告生成 API。",
     version="1.0.0",
 )
 
@@ -72,17 +72,17 @@ class CSVIngestRequest(BaseModel):
 
 
 class AnalyzeRequest(BaseModel):
-    competitor: str
-    question: str = "请基于现有公开数据进行竞品动态分析"
+    competitor: str = Field(description="区域供应源竞品，例如“山东寿光黄瓜”。")
+    question: str = "请基于现有公开数据进行区域供应源竞品动态分析"
     agent: str = Field(default="all", examples=["all", "price_monitor", "new_product", "sentiment"])
     top_k: int = 6
     session_id: str | None = Field(default=None, description="可选会话 ID；传入后会记录 user/assistant 回合。")
 
 
 class SkillRunRequest(BaseModel):
-    competitor: str = Field(default="盒马", examples=["盒马"])
-    query: str = "分析盒马近期肉蛋奶和基础蔬菜的价格变化、促销活动和负面舆情"
-    question: str = "请基于现有公开证据进行生鲜电商 Skill 化竞品分析"
+    competitor: str = Field(default="山东寿光黄瓜", examples=["山东寿光黄瓜"], description="区域供应源竞品，不是品牌、公司或电商平台。")
+    query: str = "分析山东寿光黄瓜相对河北黄瓜和辽宁批发市场黄瓜的批发价波动、异常价差、新批次供应和质量风险"
+    question: str = "请基于现有公开证据进行生鲜批发采购区域供应源 Skill 化竞品分析"
     dimensions: list[str] = Field(default_factory=lambda: ["price", "product", "sentiment", "trend"])
     report_type: str = "weekly"
     date_range: dict[str, str] = Field(default_factory=lambda: {"start": "2026-07-01", "end": "2026-07-06"})
@@ -288,7 +288,7 @@ def rebuild_rag(_: None = Depends(verify_api_key)) -> dict[str, Any]:
 
 @app.get("/rag/search")
 def search_rag(
-    query: str = Query(default="盒马 鸡蛋 牛奶 番茄 价格 促销 舆情"),
+    query: str = Query(default="山东寿光黄瓜 河北黄瓜 批发价 到货价 价差 质量风险"),
     dimension: str | None = None,
     competitor: str | None = None,
     top_k: int = 5,

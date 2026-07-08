@@ -53,6 +53,7 @@ data/reports/*
 !data/processed/.gitkeep
 !data/reports/.gitkeep
 !data/raw/sample*.csv
+!data/raw/*_manual.csv
 !data/processed/sample*.csv
 !data/reports/sample*.md
 
