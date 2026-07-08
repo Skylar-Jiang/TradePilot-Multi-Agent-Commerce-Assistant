@@ -61,6 +61,7 @@ chroma_db/
 faiss_index/
 vector_store/
 memory/
+daily-tasks/
 
 # 本地数据库与缓存
 *.db
