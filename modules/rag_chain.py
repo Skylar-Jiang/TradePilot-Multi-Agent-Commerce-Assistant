@@ -132,7 +132,11 @@ def split_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
 
 
 def tokenize(text: str) -> set[str]:
-    return set(re.findall(r"[\w\u4e00-\u9fff]+", text.lower()))
+    tokens = set(re.findall(r"[\w\u4e00-\u9fff]+", text.lower()))
+    for cjk_text in re.findall(r"[\u4e00-\u9fff]+", text):
+        for size in (2, 3):
+            tokens.update(cjk_text[index : index + size] for index in range(0, max(len(cjk_text) - size + 1, 0)))
+    return {token for token in tokens if token}
 
 
 def records_to_chunks(records: Sequence[IntelligenceRecord]) -> list[EvidenceChunk]:
@@ -152,6 +156,30 @@ def records_to_chunks(records: Sequence[IntelligenceRecord]) -> list[EvidenceChu
                 )
             )
     return chunks
+
+
+def select_diverse_chunks(chunks: Sequence[EvidenceChunk], top_k: int) -> list[EvidenceChunk]:
+    selected: list[EvidenceChunk] = []
+    selected_ids = set()
+    seen_competitors = set()
+    for chunk in chunks:
+        competitor_key = chunk.competitor or chunk.source_url or chunk.title
+        if chunk.chunk_id in selected_ids or competitor_key in seen_competitors:
+            continue
+        selected.append(chunk)
+        selected_ids.add(chunk.chunk_id)
+        seen_competitors.add(competitor_key)
+        if len(selected) >= top_k:
+            return selected
+
+    for chunk in chunks:
+        if chunk.chunk_id in selected_ids:
+            continue
+        selected.append(chunk)
+        selected_ids.add(chunk.chunk_id)
+        if len(selected) >= top_k:
+            break
+    return selected
 
 
 def compute_records_signature(records: Sequence[IntelligenceRecord], settings: dict[str, object]) -> str:
@@ -178,10 +206,15 @@ def compute_records_signature(records: Sequence[IntelligenceRecord], settings: d
 class ChromaRAGIndex:
     """Fixed chain: clean records -> chunks -> Chroma vectors -> evidence snippets."""
 
-    def __init__(self, chunks: list[EvidenceChunk] | None = None):
+    def __init__(self, chunks: list[EvidenceChunk] | None = None, use_vector_store: bool = True):
         self.chunks = chunks or []
-        self.client = chromadb.PersistentClient(path=str(CHROMA_DIR))
+        self.collection = None
         self.embedding_settings = get_embedding_settings()
+        if use_vector_store:
+            self._ensure_collection()
+
+    def _ensure_collection(self):
+        self.client = chromadb.PersistentClient(path=str(CHROMA_DIR))
         self.collection = self.client.get_or_create_collection(
             name=collection_name_for(self.embedding_settings),
             embedding_function=create_embedding_function(),
@@ -197,20 +230,23 @@ class ChromaRAGIndex:
         return cls(records_to_chunks(records))
 
     @classmethod
-    def load(cls, path: str | Path = INDEX_PATH) -> "ChromaRAGIndex":
-        index_path = Path(path)
+    def load(cls, path: str | Path | None = None) -> "ChromaRAGIndex":
+        index_path = Path(path) if path is not None else INDEX_PATH
         if index_path.exists():
             data = json.loads(index_path.read_text(encoding="utf-8"))
             return cls([EvidenceChunk(**item) for item in data])
-        return cls.from_records(load_project_records())
+        return cls(records_to_chunks(load_project_records()), use_vector_store=False)
 
-    def persist(self, path: str | Path = INDEX_PATH) -> Path:
-        index_path = Path(path)
+    def persist(self, path: str | Path | None = None) -> Path:
+        index_path = Path(path) if path is not None else INDEX_PATH
         index_path.parent.mkdir(parents=True, exist_ok=True)
         index_path.write_text(
             json.dumps([asdict(chunk) for chunk in self.chunks], ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+
+        if self.collection is None:
+            self._ensure_collection()
 
         existing = self.collection.get(include=[])
         if existing.get("ids"):
@@ -244,7 +280,15 @@ class ChromaRAGIndex:
         dimension: str | None = None,
         competitor: str | None = None,
     ) -> list[EvidenceChunk]:
-        results = self.collection.query(query_texts=[query], n_results=max(top_k * 5, top_k))
+        fallback = self._keyword_fallback(query=query, top_k=top_k, dimension=dimension, competitor=competitor)
+        if self.collection is None:
+            return fallback
+        try:
+            if self.collection.count() == 0:
+                return fallback
+            results = self.collection.query(query_texts=[query], n_results=max(top_k * 5, top_k))
+        except Exception:
+            return fallback
         ids = results.get("ids", [[]])[0]
         documents = results.get("documents", [[]])[0]
         metadatas = results.get("metadatas", [[]])[0]
@@ -266,9 +310,8 @@ class ChromaRAGIndex:
                     collected_at=metadata.get("collected_at", ""),
                 )
             )
-        fallback = self._keyword_fallback(query=query, top_k=top_k, dimension=dimension, competitor=competitor)
         by_id = {chunk.chunk_id: chunk for chunk in chunks + fallback}
-        return list(by_id.values())[:top_k]
+        return select_diverse_chunks(list(by_id.values()), top_k)
 
     def _keyword_fallback(
         self,
@@ -290,7 +333,7 @@ class ChromaRAGIndex:
                 competitor_boost = 2.0 if competitor and chunk.competitor == competitor else 0.0
                 scored.append((competitor_boost + overlap / math.sqrt(max(len(chunk_tokens), 1)), chunk))
         scored.sort(key=lambda item: item[0], reverse=True)
-        return [chunk for _, chunk in scored[:top_k]]
+        return select_diverse_chunks([chunk for _, chunk in scored], top_k)
 
 
 SimpleRAGIndex = ChromaRAGIndex

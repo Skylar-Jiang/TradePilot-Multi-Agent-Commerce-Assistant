@@ -18,6 +18,38 @@ from modules.tools import retrieve_evidence_tool
 AGENT_REGISTRY: dict[str, type["BaseAgent"]] = {}
 
 
+def merge_evidence(focused: list[dict[str, Any]], broad: list[dict[str, Any]], top_k: int) -> list[dict[str, Any]]:
+    merged: dict[str, dict[str, Any]] = {}
+    for item in focused[:1] + broad + focused[1:]:
+        key = item.get("chunk_id") or item.get("source_url") or item.get("title")
+        if key:
+            merged[key] = item
+    candidates = list(merged.values())
+    selected: list[dict[str, Any]] = []
+    seen_competitors = set()
+    selected_keys = set()
+
+    for item in candidates:
+        competitor = item.get("competitor") or item.get("source_url") or item.get("title")
+        key = item.get("chunk_id") or item.get("source_url") or item.get("title")
+        if competitor in seen_competitors or not key:
+            continue
+        selected.append(item)
+        seen_competitors.add(competitor)
+        selected_keys.add(key)
+        if len(selected) >= top_k:
+            return selected
+
+    for item in candidates:
+        key = item.get("chunk_id") or item.get("source_url") or item.get("title")
+        if key and key not in selected_keys:
+            selected.append(item)
+            selected_keys.add(key)
+        if len(selected) >= top_k:
+            break
+    return selected
+
+
 def register_agent(agent_cls: type["BaseAgent"]) -> type["BaseAgent"]:
     AGENT_REGISTRY[agent_cls.name] = agent_cls
     return agent_cls
@@ -55,12 +87,19 @@ class BaseAgent(ABC):
             return result
 
         query = self.build_query(competitor, question)
-        evidence = retrieve_evidence_tool(
+        focused_evidence = retrieve_evidence_tool(
             query=query,
             dimension=self.dimension,
             top_k=top_k,
             competitor=competitor,
         )
+        broad_evidence = retrieve_evidence_tool(
+            query=query,
+            dimension=self.dimension,
+            top_k=max(top_k * 3, top_k),
+            competitor=None,
+        )
+        evidence = merge_evidence(focused_evidence, broad_evidence, top_k)
         payload = {
             "competitor": competitor,
             "question": question,
