@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
@@ -17,12 +18,16 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from modules.data_loader import IntelligenceRecord, load_project_records
 
 INDEX_PATH = Path("data/processed/rag_index.json")
+INDEX_META_PATH = Path("data/processed/rag_index_meta.json")
 CHROMA_DIR = Path("chroma_db")
+HF_CACHE_DIR = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "hf_cache"
 COLLECTION_NAME = "competitor_intelligence"
 CHUNK_SIZE = 700
 CHUNK_OVERLAP = 120
-DEFAULT_EMBEDDING_MODEL = "BAAI/bge-m3"
+DEFAULT_EMBEDDING_MODEL = "BAAI/bge-small-zh-v1.5"
 DEFAULT_HF_ENDPOINT = "https://hf-mirror.com"
+DEFAULT_EMBEDDING_BATCH_SIZE = 64
+CHUNK_SEPARATORS = ["\n\n", "\n", "。", "！", "？", "；", "，", " ", ""]
 
 
 @dataclass
@@ -45,6 +50,7 @@ class HuggingFaceEmbeddingFunction(EmbeddingFunction[Documents]):
         model_name: str,
         device: str = "cpu",
         normalize_embeddings: bool = True,
+        batch_size: int = DEFAULT_EMBEDDING_BATCH_SIZE,
     ):
         try:
             from langchain_huggingface import HuggingFaceEmbeddings
@@ -57,7 +63,10 @@ class HuggingFaceEmbeddingFunction(EmbeddingFunction[Documents]):
         self.embeddings = HuggingFaceEmbeddings(
             model_name=model_name,
             model_kwargs={"device": device},
-            encode_kwargs={"normalize_embeddings": normalize_embeddings},
+            encode_kwargs={
+                "normalize_embeddings": normalize_embeddings,
+                "batch_size": batch_size,
+            },
         )
 
     def __call__(self, input: Documents) -> Embeddings:
@@ -77,12 +86,20 @@ def get_embedding_settings(env: dict[str, str] | None = None) -> dict[str, objec
     endpoint = env.get("HF_ENDPOINT", DEFAULT_HF_ENDPOINT).strip()
     if endpoint:
         os.environ.setdefault("HF_ENDPOINT", endpoint)
+    cache_dir = env.get("HF_HOME", str(HF_CACHE_DIR)).strip() or str(HF_CACHE_DIR)
+    Path(cache_dir).mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("HF_HOME", cache_dir)
+    os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
+    os.environ.setdefault("HUGGINGFACE_HUB_CACHE", str(Path(cache_dir) / "hub"))
+    os.environ.setdefault("SENTENCE_TRANSFORMERS_HOME", str(Path(cache_dir) / "st"))
     normalize = env.get("RAG_NORMALIZE_EMBEDDINGS", "true").strip().lower() in {"1", "true", "yes", "on"}
     return {
         "provider": "huggingface",
         "model_name": env.get("RAG_EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL).strip() or DEFAULT_EMBEDDING_MODEL,
         "device": env.get("RAG_EMBEDDING_DEVICE", "cpu").strip() or "cpu",
         "normalize_embeddings": normalize,
+        "batch_size": max(int(env.get("RAG_EMBEDDING_BATCH_SIZE", str(DEFAULT_EMBEDDING_BATCH_SIZE))), 1),
+        "cache_dir": cache_dir,
         "hf_endpoint": endpoint,
     }
 
@@ -98,6 +115,7 @@ def create_embedding_function() -> HuggingFaceEmbeddingFunction:
         model_name=str(settings["model_name"]),
         device=str(settings["device"]),
         normalize_embeddings=bool(settings["normalize_embeddings"]),
+        batch_size=int(settings["batch_size"]),
     )
 
 
@@ -108,7 +126,7 @@ def split_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
         chunk_size=chunk_size,
         chunk_overlap=overlap,
         length_function=len,
-        separators=["\n\n", "\n", "。", "！", "？", "，", " ", ""],
+        separators=CHUNK_SEPARATORS,
     )
     return [chunk.strip() for chunk in splitter.split_text(text or "") if chunk.strip()]
 
@@ -134,6 +152,27 @@ def records_to_chunks(records: Sequence[IntelligenceRecord]) -> list[EvidenceChu
                 )
             )
     return chunks
+
+
+def compute_records_signature(records: Sequence[IntelligenceRecord], settings: dict[str, object]) -> str:
+    payload = {
+        "embedding_model": settings["model_name"],
+        "chunk_size": CHUNK_SIZE,
+        "chunk_overlap": CHUNK_OVERLAP,
+        "records": [
+            {
+                "record_id": record.record_id,
+                "title": record.title,
+                "content": record.content,
+                "source_url": record.source_url,
+                "competitor": record.competitor,
+                "dimension": record.dimension,
+                "collected_at": record.collected_at,
+            }
+            for record in records
+        ],
+    }
+    return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
 
 
 class ChromaRAGIndex:
@@ -178,21 +217,24 @@ class ChromaRAGIndex:
             self.collection.delete(ids=existing["ids"])
 
         if self.chunks:
-            self.collection.add(
-                ids=[chunk.chunk_id for chunk in self.chunks],
-                documents=[chunk.text for chunk in self.chunks],
-                metadatas=[
-                    {
-                        "record_id": chunk.record_id,
-                        "title": chunk.title,
-                        "source_url": chunk.source_url,
-                        "competitor": chunk.competitor,
-                        "dimension": chunk.dimension,
-                        "collected_at": chunk.collected_at,
-                    }
-                    for chunk in self.chunks
-                ],
-            )
+            batch_size = int(self.embedding_settings["batch_size"])
+            for start in range(0, len(self.chunks), batch_size):
+                batch = self.chunks[start : start + batch_size]
+                self.collection.add(
+                    ids=[chunk.chunk_id for chunk in batch],
+                    documents=[chunk.text for chunk in batch],
+                    metadatas=[
+                        {
+                            "record_id": chunk.record_id,
+                            "title": chunk.title,
+                            "source_url": chunk.source_url,
+                            "competitor": chunk.competitor,
+                            "dimension": chunk.dimension,
+                            "collected_at": chunk.collected_at,
+                        }
+                        for chunk in batch
+                    ],
+                )
         return index_path
 
     def search(
@@ -255,6 +297,31 @@ SimpleRAGIndex = ChromaRAGIndex
 
 
 def build_project_index() -> ChromaRAGIndex:
-    index = ChromaRAGIndex.from_records(load_project_records())
+    records = load_project_records()
+    settings = get_embedding_settings()
+    signature = compute_records_signature(records, settings)
+    if INDEX_META_PATH.exists() and INDEX_PATH.exists():
+        try:
+            meta = json.loads(INDEX_META_PATH.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            meta = {}
+        if meta.get("signature") == signature:
+            return ChromaRAGIndex.load()
+
+    index = ChromaRAGIndex.from_records(records)
     index.persist()
+    INDEX_META_PATH.write_text(
+        json.dumps(
+            {
+                "signature": signature,
+                "record_count": len(records),
+                "chunk_count": len(index.chunks),
+                "embedding_model": settings["model_name"],
+                "batch_size": settings["batch_size"],
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     return index

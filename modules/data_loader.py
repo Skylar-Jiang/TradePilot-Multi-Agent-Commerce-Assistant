@@ -70,13 +70,13 @@ def load_csv(path: str | Path) -> list[IntelligenceRecord]:
         fresh_content = build_content_from_fresh_row(row)
         records.append(
             IntelligenceRecord(
-                title=row.get("title", ""),
+                title=row.get("title", "") or build_title_from_row(row),
                 content=row.get("content", row.get("text", fresh_content)),
                 source_url=row.get("source_url", row.get("url", "")),
                 source_type=row.get("source_type", "csv"),
-                competitor=row.get("competitor", ""),
-                dimension=row.get("dimension", "general"),
-                collected_at=row.get("collected_at", row.get("publish_time", "")),
+                competitor=row.get("competitor", "") or build_competitor_from_row(row),
+                dimension=row.get("dimension", "") or infer_dimension_from_row(row),
+                collected_at=row.get("collected_at", row.get("publish_time", row.get("quote_date", ""))),
                 record_id=row.get("record_id", ""),
             )
         )
@@ -84,6 +84,20 @@ def load_csv(path: str | Path) -> list[IntelligenceRecord]:
 
 
 def build_content_from_fresh_row(row: dict[str, Any]) -> str:
+    if {"quote_date", "province", "market", "vegetable_name", "current_price"}.issubset(row):
+        parts = [
+            f"报价日期：{row.get('quote_date', '')}",
+            f"省份：{row.get('province', '')}",
+            f"市场：{row.get('market', '')}",
+            f"菜品：{row.get('vegetable_name', '')}",
+            f"商品编码：{row.get('commodity_id', '')}",
+            f"当前价格：{row.get('current_price', '')}{row.get('unit', '')}",
+            f"上一期价格：{row.get('previous_price', '')}{row.get('unit', '')}",
+            f"涨跌幅：{row.get('change_rate', '')}%",
+            f"来源链接：{row.get('source_url', row.get('url', ''))}",
+        ]
+        return "；".join(str(part) for part in parts if str(part).strip())
+
     if "product_name" not in row:
         return ""
     parts = [
@@ -99,6 +113,29 @@ def build_content_from_fresh_row(row: dict[str, Any]) -> str:
         f"发布时间：{row.get('publish_time', '')}",
     ]
     return "；".join(str(part) for part in parts if str(part).strip())
+
+
+def build_title_from_row(row: dict[str, Any]) -> str:
+    if {"quote_date", "province", "market", "vegetable_name"}.issubset(row):
+        return (
+            f"{row.get('quote_date', '')} "
+            f"{row.get('province', '')}"
+            f"{row.get('market', '')}"
+            f"{row.get('vegetable_name', '')}价格行情"
+        ).strip()
+    return ""
+
+
+def build_competitor_from_row(row: dict[str, Any]) -> str:
+    if {"province", "vegetable_name"}.issubset(row):
+        return f"{row.get('province', '')}{row.get('vegetable_name', '')}".strip()
+    return ""
+
+
+def infer_dimension_from_row(row: dict[str, Any]) -> str:
+    if {"current_price", "previous_price", "change_rate"}.issubset(row):
+        return "price"
+    return "general"
 
 
 def fetch_webpage(url: str, competitor: str = "", dimension: str = "general") -> IntelligenceRecord:
