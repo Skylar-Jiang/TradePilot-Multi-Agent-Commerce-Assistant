@@ -112,7 +112,14 @@ def evidence_for(payload: dict[str, Any], dimension: str | None = None, query_su
     question = payload.get("query") or payload.get("question", "请进行生鲜批发采购区域供应源竞品分析")
     top_k = int(payload.get("top_k", 5))
     query = f"{competitor} {question} {query_suffix}".strip()
-    return retrieve_evidence_tool(query=query, dimension=dimension, top_k=top_k, competitor=competitor)
+    focused = retrieve_evidence_tool(query=query, dimension=dimension, top_k=top_k, competitor=competitor)
+    broad = retrieve_evidence_tool(query=query, dimension=dimension, top_k=top_k, competitor=None)
+    merged: dict[str, dict[str, Any]] = {}
+    for item in focused + broad:
+        key = item.get("chunk_id") or item.get("source_url") or item.get("title")
+        if key:
+            merged[key] = item
+    return list(merged.values())[:top_k]
 
 
 def summarize_evidence(evidence: list[dict[str, Any]], dimension: str) -> dict[str, Any]:

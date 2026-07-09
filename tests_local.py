@@ -1,11 +1,12 @@
+import csv
 import os
 import tempfile
 from pathlib import Path
 
 import modules.rag_chain as rag_module
+from modules.data_loader import load_csv
 from modules.agent_core import registry_snapshot
 from modules.dashboard import comparison_data, competitor_summary, risk_tags_view
-from modules.data_loader import load_csv
 from modules.llm_client import ModelConfig, parse_json_object
 from modules.memory_store import ConversationMemory
 from modules.rag_chain import (
@@ -73,13 +74,86 @@ def test_data_and_rag():
     with_test_rag_embedding(run)
 
 
+def test_table_csv_comparison_retrieves_cross_competitor_evidence():
+    def run():
+        temp_dir = Path(tempfile.mkdtemp(prefix="table-rag-test-"))
+        csv_path = temp_dir / "national_veg_prices.csv"
+        rows = [
+            {
+                "quote_date": "2026-07-05",
+                "province": "山东",
+                "market": "寿光批发市场",
+                "vegetable_name": "黄瓜",
+                "commodity_id": "cucumber-sg-001",
+                "current_price": "3.70",
+                "previous_price": "3.90",
+                "change_rate": "-5.13",
+                "unit": "元/kg",
+                "source_url": "https://price.example.local/shouguang-cucumber-20260705",
+            },
+            {
+                "quote_date": "2026-07-05",
+                "province": "河北",
+                "market": "石家庄批发市场",
+                "vegetable_name": "黄瓜",
+                "commodity_id": "cucumber-hb-001",
+                "current_price": "3.20",
+                "previous_price": "3.10",
+                "change_rate": "3.23",
+                "unit": "元/kg",
+                "source_url": "https://price.example.local/hebei-cucumber-20260705",
+            },
+            {
+                "quote_date": "2026-07-05",
+                "province": "辽宁",
+                "market": "沈阳批发市场",
+                "vegetable_name": "黄瓜",
+                "commodity_id": "cucumber-ln-001",
+                "current_price": "2.80",
+                "previous_price": "3.00",
+                "change_rate": "-6.67",
+                "unit": "元/kg",
+                "source_url": "https://price.example.local/liaoning-cucumber-20260705",
+            },
+        ]
+        with csv_path.open("w", newline="", encoding="utf-8-sig") as file:
+            writer = csv.DictWriter(file, fieldnames=list(rows[0]))
+            writer.writeheader()
+            writer.writerows(rows)
+
+        records = load_csv(csv_path)
+        assert {record.competitor for record in records} == {"山东黄瓜", "河北黄瓜", "辽宁黄瓜"}
+        assert {record.dimension for record in records} == {"price"}
+
+        old_loader = rag_module.load_project_records
+        try:
+            rag_module.load_project_records = lambda: records
+            build_project_index()
+            result = run_skill(
+                "orchestrator_skill",
+                {
+                    "competitor": "山东黄瓜",
+                    "query": "对比山东黄瓜、河北黄瓜和辽宁黄瓜的当前价格、涨跌幅和区域价差",
+                    "top_k": 3,
+                    "provider": "mock",
+                },
+            )
+        finally:
+            rag_module.load_project_records = old_loader
+
+        competitors = {item.get("competitor") for item in result["evidence"]}
+        assert {"山东黄瓜", "河北黄瓜", "辽宁黄瓜"} <= competitors
+
+    with_test_rag_embedding(run)
+
+
 def test_rag_uses_huggingface_embedding_defaults():
     settings = get_embedding_settings({})
     assert settings["provider"] == "huggingface"
     assert settings["model_name"] == DEFAULT_EMBEDDING_MODEL
     assert settings["device"] == "cpu"
     assert settings["normalize_embeddings"] is True
-    assert collection_name_for(settings) == "competitor_intelligence_baai_bge_m3"
+    assert collection_name_for(settings) == "competitor_intelligence_baai_bge_small_zh_v1_5"
     assert callable(HuggingFaceEmbeddingFunction.embed_query)
     assert HuggingFaceEmbeddingFunction.name() == "huggingface"
 
@@ -180,6 +254,7 @@ def test_skills_mock_provider():
 
 if __name__ == "__main__":
     test_data_and_rag()
+    test_table_csv_comparison_retrieves_cross_competitor_evidence()
     test_rag_uses_huggingface_embedding_defaults()
     test_deepseek_env_fallback_is_openai_compatible()
     test_conversation_memory_records_turns()
