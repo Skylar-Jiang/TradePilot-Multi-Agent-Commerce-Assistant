@@ -16,6 +16,7 @@ htmlcov/
 .coverage.*
 .cache/
 docs/superpowers/
+.worktrees/
 
 # 打包产物
 build/
