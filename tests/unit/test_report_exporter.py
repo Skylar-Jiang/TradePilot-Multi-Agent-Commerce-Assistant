@@ -1,8 +1,12 @@
 import json
 from pathlib import Path
 
-from app.core.enums import AgentStatus, AuditStatus, DataMode, DataOrigin
-from app.schemas.analysis import AuditResult, OperationPlan, ProductMarketAnalysis, UserInsight
+from app.agents.contracts import EvidenceAuditAgentInput, OperationsDecisionAgentInput
+from app.agents.evidence_audit import EvidenceAuditAgent
+from app.agents.operations_decision import OperationsDecisionAgent
+from app.core.enums import AgentStatus, DataMode, DataOrigin, KnowledgeType
+from app.schemas.analysis import ProductMarketAnalysis, UserInsight
+from app.schemas.evidence import EvidenceReference
 from app.schemas.product import ProductCreate, ProductProfile
 from app.schemas.report import DEMO_DISCLAIMER
 from app.services.report_exporter import ReportExporter
@@ -14,8 +18,34 @@ def completed_state() -> TradePilotState:
         product_id="product-1",
         data_origin=DataOrigin.DEMO,
         **ProductCreate(
-            name="DEMO Portable Organizer", category="demo", data_mode=DataMode.DEMO
+            name="DEMO Portable Organizer",
+            category="demo",
+            features=["compact storage"],
+            use_scenarios=["dorm rooms"],
+            target_market="United States",
+            target_audience=["college students"],
+            data_mode=DataMode.DEMO,
         ).model_dump(),
+    )
+    market = ProductMarketAnalysis(
+        status=AgentStatus.SUCCEEDED,
+        data_origin=DataOrigin.DEMO,
+        evidence_ids=["market-1"],
+    )
+    insight = UserInsight(
+        status=AgentStatus.SUCCEEDED,
+        data_origin=DataOrigin.DEMO,
+        evidence_ids=["review-1"],
+    )
+    plan = OperationsDecisionAgent().run(
+        OperationsDecisionAgentInput(
+            product=product,
+            product_market_analysis=market,
+            user_insight=insight,
+        )
+    )
+    audit = EvidenceAuditAgent().run(
+        EvidenceAuditAgentInput(product=product, operation_plan=plan)
     )
     return TradePilotState(
         task_id="task-1",
@@ -24,16 +54,36 @@ def completed_state() -> TradePilotState:
         thread_id="thread-1",
         data_mode=DataMode.DEMO,
         product_profile=product,
-        product_market_analysis=ProductMarketAnalysis(
-            status=AgentStatus.SUCCEEDED, data_origin=DataOrigin.DEMO
-        ),
-        user_insight=UserInsight(status=AgentStatus.SUCCEEDED, data_origin=DataOrigin.DEMO),
-        operation_plan=OperationPlan(status=AgentStatus.SUCCEEDED, data_origin=DataOrigin.DEMO),
-        audit_result=AuditResult(status=AuditStatus.PASS, data_origin=DataOrigin.DEMO),
+        target_market=product.target_market,
+        product_market_analysis=market,
+        user_insight=insight,
+        operation_plan=plan,
+        audit_result=audit,
+        rag_evidence=[
+            EvidenceReference(
+                evidence_id="market-1",
+                evidence_type="rag_excerpt",
+                knowledge_type=KnowledgeType.PRODUCT_KNOWLEDGE,
+                source_name="Demo product source",
+                excerpt="Demo product evidence.",
+                data_origin=DataOrigin.DEMO,
+                is_demo=True,
+            ),
+            EvidenceReference(
+                evidence_id="review-1",
+                evidence_type="rag_excerpt",
+                knowledge_type=KnowledgeType.REVIEW_INSIGHT,
+                source_name="Demo review source",
+                excerpt="Demo review evidence.",
+                data_origin=DataOrigin.DEMO,
+                is_demo=True,
+            ),
+        ],
+        report_version=2,
     )
 
 
-def test_exporter_writes_demo_scaffold_json_and_markdown(tmp_path: Path) -> None:
+def test_exporter_writes_versioned_structured_json_and_markdown(tmp_path: Path) -> None:
     report = ReportExporter(tmp_path).export(completed_state())
 
     json_path = Path(report.json_path)
@@ -45,6 +95,16 @@ def test_exporter_writes_demo_scaffold_json_and_markdown(tmp_path: Path) -> None
     assert payload["data_origin"] == "demo"
     assert payload["implementation_status"] == "scaffold"
     assert payload["disclaimer"] == DEMO_DISCLAIMER
+    assert payload["version"] == 3
+    assert payload["sections"]["content_playbook"]["title"]
+    assert len(payload["sections"]["content_playbook"]["bullets"]) == 5
+    assert payload["sections"]["executive_summary"]["evidence_count"] == 2
+    assert {item["evidence_id"] for item in payload["sections"]["evidence_index"]} == {
+        "market-1",
+        "review-1",
+    }
     assert "DEMO" in markdown
     assert "Scaffold" in markdown
+    assert "Content playbook" in markdown
+    assert "market-1" in markdown
     assert DEMO_DISCLAIMER in markdown
