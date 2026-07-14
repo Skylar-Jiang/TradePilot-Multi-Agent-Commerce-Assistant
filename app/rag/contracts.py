@@ -18,6 +18,8 @@ class KnowledgeDocument(BaseModel):
 
 
 class KnowledgeStore(Protocol):
+    def clear(self) -> None: ...
+
     def ingest(self, documents: list[KnowledgeDocument]) -> int: ...
 
     def retrieve(

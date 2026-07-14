@@ -6,7 +6,10 @@
 - One `app/` backend package, one FastAPI app/entry, ten `/api/v1` routes and unified envelopes.
 - Pydantic v2 product, evidence, four Agent output, audit, report, and `TradePilotState` contracts.
 - SQLAlchemy/SQLite baseline tables and repository interfaces.
+- Alembic initial migration matching the SQLAlchemy baseline; runtime initialization upgrades to `head`.
 - Two logical RAG domains, an in-memory test store, and an injected-embedding Chroma adapter.
+- Protocol/factory injection for RAG plus a typed `StatisticsProvider` scaffold injection point.
+- Runtime domain-profile loading from `config/domain_profiles/` with configured adapter selection.
 - True LangGraph fan-out/fan-in, separate decision/audit nodes, and one bounded retry.
 - Final state, four outputs, evidence, and Demo JSON/Markdown report persistence.
 - Generic Demo adapter/fixtures, scripts, tests, and empty frontend placeholder.
@@ -33,6 +36,11 @@ than pretending Demo Stub output belongs to another mode.
 
 ## Next entry points
 
-See `docs/team-work-split.md` for the three owners. Domain additions must leave API,
-`TradePilotState`, repository interfaces, and graph topology unchanged unless the team explicitly
-approves a contract revision.
+See `docs/team-work-split.md` for the three owners and `docs/contract-governance.md` for the frozen
+surface. The Contract Maintainer owns shared schemas, `TradePilotState`, graph topology, router,
+database models/migrations, and cross-team ports. Any change to that surface is a separate Contract
+PR merged before dependent work.
+
+All three teammates can begin from the same baseline: the statistics Stub, in-memory RAG factory,
+Demo profile loader, shared builders, and persisted scaffold outputs remove dependencies on another
+teammate's unfinished implementation.

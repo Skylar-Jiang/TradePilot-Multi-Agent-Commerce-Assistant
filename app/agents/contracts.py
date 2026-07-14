@@ -3,16 +3,19 @@ from pydantic import BaseModel, Field
 from app.schemas.analysis import OperationPlan, ProductMarketAnalysis, UserInsight
 from app.schemas.evidence import EvidenceReference
 from app.schemas.product import ProductProfile
+from app.statistics.contracts import StatisticsResult
 
 
 class ProductMarketAgentInput(BaseModel):
     product: ProductProfile
     evidence: list[EvidenceReference] = Field(default_factory=list)
+    statistics: StatisticsResult
 
 
 class UserInsightAgentInput(BaseModel):
     product: ProductProfile
     evidence: list[EvidenceReference] = Field(default_factory=list)
+    statistics: StatisticsResult
 
 
 class OperationsDecisionAgentInput(BaseModel):

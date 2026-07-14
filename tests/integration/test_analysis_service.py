@@ -44,9 +44,10 @@ def test_analysis_service_persists_four_outputs_evidence_state_and_report(tmp_pa
         assert run.state["report_id"] == run.report_id
         assert run.state["report_paths"]["json"].endswith(".json")
         assert set(run.state["node_status"]) == {
-            "input_validator",
-            "product_normalizer",
-            "product_market_agent",
+                "input_validator",
+                "product_normalizer",
+                "statistics_provider",
+                "product_market_agent",
             "user_insight_agent",
             "operations_decision_agent",
             "evidence_audit_agent",

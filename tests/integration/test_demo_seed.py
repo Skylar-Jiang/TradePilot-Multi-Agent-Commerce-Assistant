@@ -1,8 +1,10 @@
+from pathlib import Path
+
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from app.adapters.demo import DemoDomainAdapter
+from app.adapters.profiles import load_domain_adapter, load_domain_profile
 from app.db.base import Base
 from app.db.models.core import CompetitorOffer, KnowledgeSource, Review
 from app.db.repositories.sqlalchemy import SqlAlchemyProductRepository
@@ -18,7 +20,11 @@ def test_demo_seed_is_marked_and_idempotent() -> None:
     Base.metadata.create_all(engine)
     with Session(engine) as session:
         store = InMemoryKnowledgeStore()
-        adapter = DemoDomainAdapter()
+        profile = load_domain_profile(
+            "generic_cross_border_demo",
+            profiles_dir=Path(__file__).resolve().parents[2] / "config" / "domain_profiles",
+        )
+        adapter = load_domain_adapter(profile)
         product = adapter.seed(session, SqlAlchemyProductRepository(session), store)
         repeated = adapter.seed(session, SqlAlchemyProductRepository(session), store)
 

@@ -109,3 +109,6 @@ def test_minimal_chroma_adapter_uses_injected_embedding_without_download(tmp_pat
     assert result.status is AgentStatus.SUCCEEDED
     assert result.evidence[0].evidence_id == "chroma-demo-1"
     assert {item.name for item in store.client.list_collections()} == COLLECTION_NAMES
+
+    store.clear()
+    assert store.client.list_collections() == []

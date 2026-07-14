@@ -22,3 +22,7 @@ Errors set `success=false`, `data=null`, and provide `error.code`, `error.messag
 
 Real mode without model configuration returns HTTP 503 with `llm_not_configured`. It never switches
 to Mock or Demo. Real analysis remains unavailable in this scaffold even when configuration exists.
+
+Every router operation declares `response_model=ApiResponse[...]` and the unified error envelope;
+`/openapi.json` and Swagger are the frontend contract. Route, response-envelope, or shared payload
+changes belong in a standalone Contract PR owned by the Contract Maintainer.

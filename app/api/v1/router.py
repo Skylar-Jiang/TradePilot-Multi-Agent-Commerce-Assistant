@@ -4,10 +4,13 @@ from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.api.responses import success
+from app.api.responses import API_ERROR_RESPONSES, success
 from app.core.enums import FileType
-from app.schemas.analysis import AnalysisRunCreate, FeedbackCreate
-from app.schemas.product import ProductCreate
+from app.schemas.analysis import AnalysisRunCreate, AnalysisRunRead, FeedbackCreate
+from app.schemas.api import ConversationRead, FeedbackAccepted, HealthRead, KnowledgeRebuildRead
+from app.schemas.common import ApiResponse
+from app.schemas.product import ProductCreate, ProductFileRead, ProductProfile
+from app.schemas.report import FinalReport
 from app.services.analysis_service import AnalysisService
 from app.services.conversation_service import ConversationService
 from app.services.knowledge_service import KnowledgeService
@@ -25,10 +28,16 @@ def analysis_service(request: Request, session: Session) -> AnalysisService:
         knowledge_store=request.app.state.knowledge_store,
         report_dir=request.app.state.settings.report_dir,
         settings=request.app.state.settings,
+        statistics_provider=request.app.state.statistics_provider_factory(session),
     )
 
 
-@router.get("/health", summary="TradePilot scaffold health")
+@router.get(
+    "/health",
+    summary="TradePilot scaffold health",
+    response_model=ApiResponse[HealthRead],
+    responses=API_ERROR_RESPONSES,
+)
 def health(request: Request):  # type: ignore[no-untyped-def]
     return success(
         request,
@@ -36,19 +45,36 @@ def health(request: Request):  # type: ignore[no-untyped-def]
     )
 
 
-@router.post("/products", status_code=201, summary="Create a product profile")
+@router.post(
+    "/products",
+    status_code=201,
+    summary="Create a product profile",
+    response_model=ApiResponse[ProductProfile],
+    responses=API_ERROR_RESPONSES,
+)
 def create_product(request: Request, payload: ProductCreate, session: DbSession):  # type: ignore[no-untyped-def]
     product = ProductService(session, request.app.state.settings.upload_dir).create(payload)
     return success(request, product, status_code=201, data_mode=payload.data_mode.value)
 
 
-@router.get("/products/{product_id}", summary="Get a product profile")
+@router.get(
+    "/products/{product_id}",
+    summary="Get a product profile",
+    response_model=ApiResponse[ProductProfile],
+    responses=API_ERROR_RESPONSES,
+)
 def get_product(request: Request, product_id: str, session: DbSession):  # type: ignore[no-untyped-def]
     product = ProductService(session, request.app.state.settings.upload_dir).get(product_id)
     return success(request, product, data_mode=product.data_mode.value)
 
 
-@router.post("/products/{product_id}/files", status_code=201, summary="Attach a product file")
+@router.post(
+    "/products/{product_id}/files",
+    status_code=201,
+    summary="Attach a product file",
+    response_model=ApiResponse[ProductFileRead],
+    responses=API_ERROR_RESPONSES,
+)
 def add_product_file(
     request: Request,
     product_id: str,
@@ -66,7 +92,13 @@ def add_product_file(
     return success(request, result, status_code=201)
 
 
-@router.post("/analysis-runs", status_code=201, summary="Run Demo scaffold analysis")
+@router.post(
+    "/analysis-runs",
+    status_code=201,
+    summary="Run Demo scaffold analysis",
+    response_model=ApiResponse[AnalysisRunRead],
+    responses=API_ERROR_RESPONSES,
+)
 def create_analysis_run(
     request: Request, payload: AnalysisRunCreate, session: DbSession
 ):  # type: ignore[no-untyped-def]
@@ -74,13 +106,24 @@ def create_analysis_run(
     return success(request, run, status_code=201, data_mode=payload.data_mode.value)
 
 
-@router.get("/analysis-runs/{run_id}", summary="Get persisted analysis state")
+@router.get(
+    "/analysis-runs/{run_id}",
+    summary="Get persisted analysis state",
+    response_model=ApiResponse[AnalysisRunRead],
+    responses=API_ERROR_RESPONSES,
+)
 def get_analysis_run(request: Request, run_id: str, session: DbSession):  # type: ignore[no-untyped-def]
     run = analysis_service(request, session).get_run(run_id)
     return success(request, run, data_mode=run.data_mode.value)
 
 
-@router.post("/analysis-runs/{run_id}/feedback", status_code=201, summary="Store scaffold feedback")
+@router.post(
+    "/analysis-runs/{run_id}/feedback",
+    status_code=201,
+    summary="Store scaffold feedback",
+    response_model=ApiResponse[FeedbackAccepted],
+    responses=API_ERROR_RESPONSES,
+)
 def add_feedback(
     request: Request,
     run_id: str,
@@ -93,18 +136,33 @@ def add_feedback(
     return success(request, result, status_code=201)
 
 
-@router.get("/reports/{report_id}", summary="Get Demo scaffold report")
+@router.get(
+    "/reports/{report_id}",
+    summary="Get Demo scaffold report",
+    response_model=ApiResponse[FinalReport],
+    responses=API_ERROR_RESPONSES,
+)
 def get_report(request: Request, report_id: str, session: DbSession):  # type: ignore[no-untyped-def]
     report = analysis_service(request, session).get_report(report_id)
     return success(request, report, data_mode="demo")
 
 
-@router.post("/knowledge/rebuild", summary="Rebuild lightweight knowledge store")
+@router.post(
+    "/knowledge/rebuild",
+    summary="Rebuild lightweight knowledge store",
+    response_model=ApiResponse[KnowledgeRebuildRead],
+    responses=API_ERROR_RESPONSES,
+)
 def rebuild_knowledge(request: Request, session: DbSession):  # type: ignore[no-untyped-def]
     count = KnowledgeService(session, request.app.state.knowledge_store).rebuild()
     return success(request, {"documents_ingested": count, "implementation_status": "scaffold"})
 
 
-@router.get("/conversations/{session_id}", summary="Get stored feedback conversation")
+@router.get(
+    "/conversations/{session_id}",
+    summary="Get stored feedback conversation",
+    response_model=ApiResponse[ConversationRead],
+    responses=API_ERROR_RESPONSES,
+)
 def get_conversation(request: Request, session_id: str, session: DbSession):  # type: ignore[no-untyped-def]
     return success(request, ConversationService(session).get(session_id))

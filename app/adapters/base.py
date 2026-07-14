@@ -1,4 +1,4 @@
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from sqlalchemy.orm import Session
 
@@ -7,6 +7,7 @@ from app.rag.contracts import KnowledgeStore
 from app.schemas.product import ProductProfile
 
 
+@runtime_checkable
 class DomainAdapter(Protocol):
     domain_name: str
 

@@ -23,6 +23,12 @@ Copy-Item .env.example .env
 
 Health: `GET http://127.0.0.1:8000/api/v1/health`. Swagger: `/docs`.
 
+Database initialization uses Alembic. Apply the current schema directly with:
+
+```powershell
+.\.venv\Scripts\python.exe -m alembic upgrade head
+```
+
 ## Verify
 
 ```powershell
@@ -35,3 +41,4 @@ Health: `GET http://127.0.0.1:8000/api/v1/health`. Swagger: `/docs`.
 Real mode requires model configuration and never falls back. Even when configured, this scaffold
 returns a clear 503 because real Agent implementations are intentionally deferred. See
 `docs/handover.md` and `docs/team-work-split.md` before extending the system.
+Shared contracts and migrations follow `docs/contract-governance.md`.

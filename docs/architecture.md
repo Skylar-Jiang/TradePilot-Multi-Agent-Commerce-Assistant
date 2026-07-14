@@ -10,8 +10,9 @@ flowchart LR
     S --> DB["Repository ports / SQLAlchemy / SQLite"]
     S --> G["LangGraph StateGraph"]
     G --> N["InputValidator -> ProductNormalizer"]
-    N --> PM["ProductMarketAgent Stub"]
-    N --> UI["UserInsightAgent Stub"]
+    N --> ST["StatisticsProvider Stub"]
+    ST --> PM["ProductMarketAgent Stub"]
+    ST --> UI["UserInsightAgent Stub"]
     PM --> OD["OperationsDecisionAgent Stub"]
     UI --> OD
     OD --> EA["EvidenceAuditAgent Stub"]
@@ -24,3 +25,7 @@ flowchart LR
 The two knowledge domains are `product_knowledge` and `review_insight`. Tests and smoke runs use an
 in-memory store. `ChromaKnowledgeStore` is a minimal adapter that requires an injected embedding
 function and never downloads a model itself.
+
+The composition root injects a `KnowledgeStore` factory and a session-scoped `StatisticsProvider`
+factory. Domain seed entry points resolve a configured `DomainAdapter` through
+`config/domain_profiles/`; no Agent receives a database session.

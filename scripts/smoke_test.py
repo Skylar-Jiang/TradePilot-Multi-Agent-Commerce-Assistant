@@ -9,13 +9,13 @@ sys.path.insert(0, str(ROOT))
 from sqlalchemy import create_engine, func, select  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
-from app.adapters.demo import DemoDomainAdapter  # noqa: E402
+from app.adapters.profiles import load_domain_adapter, load_domain_profile  # noqa: E402
 from app.core.config import Settings  # noqa: E402
 from app.core.enums import DataMode, RunStatus  # noqa: E402
-from app.db.base import Base  # noqa: E402
+from app.db.migrations import upgrade_database  # noqa: E402
 from app.db.models.core import AgentOutput, EvidenceReferenceRecord, Report  # noqa: E402
 from app.db.repositories.sqlalchemy import SqlAlchemyProductRepository  # noqa: E402
-from app.rag.in_memory import InMemoryKnowledgeStore  # noqa: E402
+from app.rag.factory import create_knowledge_store  # noqa: E402
 from app.schemas.analysis import AnalysisRunCreate  # noqa: E402
 from app.services.analysis_service import AnalysisService  # noqa: E402
 
@@ -23,11 +23,16 @@ from app.services.analysis_service import AnalysisService  # noqa: E402
 def main() -> None:
     with TemporaryDirectory(prefix="tradepilot-smoke-") as temp:
         root = Path(temp)
-        engine = create_engine(f"sqlite:///{root / 'smoke.db'}")
-        Base.metadata.create_all(engine)
+        database_url = f"sqlite:///{root / 'smoke.db'}"
+        upgrade_database(database_url)
+        engine = create_engine(database_url)
         with Session(engine) as session:
-            store = InMemoryKnowledgeStore()
-            product = DemoDomainAdapter().seed(
+            store = create_knowledge_store()
+            profile = load_domain_profile(
+                "generic_cross_border_demo",
+                profiles_dir=ROOT / "config" / "domain_profiles",
+            )
+            product = load_domain_adapter(profile).seed(
                 session,
                 SqlAlchemyProductRepository(session),
                 store,

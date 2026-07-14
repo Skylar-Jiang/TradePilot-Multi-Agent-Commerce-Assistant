@@ -8,6 +8,7 @@ from app.schemas.analysis import AuditResult, OperationPlan, ProductMarketAnalys
 from app.schemas.common import AgentExecution, DataGap, utc_now
 from app.schemas.evidence import EvidenceReference
 from app.schemas.product import ProductProfile
+from app.statistics.contracts import StatisticsResult
 
 
 def merge_node_status(
@@ -30,7 +31,7 @@ class TradePilotState(BaseModel):
     operation_plan: OperationPlan | None = None
     audit_result: AuditResult | None = None
     rag_evidence: list[EvidenceReference] = Field(default_factory=list)
-    sql_results: dict[str, Any] = Field(default_factory=dict)
+    statistics_result: StatisticsResult | None = None
     data_gaps: list[DataGap] = Field(default_factory=list)
     errors: list[dict[str, Any]] = Field(default_factory=list)
     current_node: str = "pending"

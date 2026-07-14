@@ -11,6 +11,7 @@ from app.rag.contracts import KnowledgeStore
 from app.schemas.analysis import AnalysisRunCreate, AnalysisRunRead
 from app.schemas.report import FinalReport
 from app.services.report_exporter import ReportExporter
+from app.statistics.contracts import StatisticsProvider
 from app.workflows.graph import TradePilotWorkflow
 from app.workflows.state import TradePilotState
 
@@ -23,12 +24,14 @@ class AnalysisService:
         knowledge_store: KnowledgeStore,
         report_dir: Path,
         settings: Settings,
+        statistics_provider: StatisticsProvider | None = None,
     ) -> None:
         self.products = SqlAlchemyProductRepository(session)
         self.analyses = SqlAlchemyAnalysisRepository(session)
         self.knowledge_store = knowledge_store
         self.exporter = ReportExporter(report_dir)
         self.settings = settings
+        self.statistics_provider = statistics_provider
 
     def start(self, payload: AnalysisRunCreate) -> AnalysisRunRead:
         if payload.data_mode is DataMode.REAL:
@@ -51,6 +54,7 @@ class AnalysisService:
 
         workflow = TradePilotWorkflow(
             knowledge_store=self.knowledge_store,
+            statistics_provider=self.statistics_provider,
             persist_callback=persist,
         )
         state = TradePilotState(

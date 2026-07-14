@@ -2,12 +2,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models.core import KnowledgeSource
-from app.rag.contracts import KnowledgeDocument
-from app.rag.in_memory import InMemoryKnowledgeStore
+from app.rag.contracts import KnowledgeDocument, KnowledgeStore
 
 
 class KnowledgeService:
-    def __init__(self, session: Session, store: InMemoryKnowledgeStore) -> None:
+    def __init__(self, session: Session, store: KnowledgeStore) -> None:
         self.session = session
         self.store = store
 

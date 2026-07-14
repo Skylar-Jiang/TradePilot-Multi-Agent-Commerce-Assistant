@@ -13,3 +13,11 @@ All inputs and outputs are validated by Pydantic v2.
 All four outputs include `data_origin=demo` and `implementation_status=scaffold`. No complete Prompt,
 sentiment logic, market statistics, decision rules, marketing copy, or semantic audit exists here.
 Agent contracts and the StateGraph field boundaries are the stable extension points.
+
+`ProductMarketAgentInput` and `UserInsightAgentInput` both require the same validated
+`StatisticsResult`. The `statistics_provider` LangGraph node writes
+`TradePilotState.statistics_result` once before those two nodes fan out. The default
+`ScaffoldStatisticsProvider` returns empty metrics and `insufficient_evidence`; teammate one replaces
+the provider, while teammate two consumes the contract. Neither team needs to edit the graph.
+
+The Contract Maintainer owns `app/agents/contracts.py`, `TradePilotState`, and graph topology.

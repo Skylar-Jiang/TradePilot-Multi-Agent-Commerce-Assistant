@@ -43,6 +43,11 @@ class ChromaKnowledgeStore:
             )
         return len(documents)
 
+    def clear(self) -> None:
+        for collection in self.client.list_collections():
+            if collection.name in {item.value for item in KnowledgeType}:
+                self.client.delete_collection(collection.name)
+
     def retrieve(
         self,
         *,

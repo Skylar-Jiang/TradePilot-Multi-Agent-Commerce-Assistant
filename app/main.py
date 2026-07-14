@@ -11,11 +11,17 @@ from app.api.responses import failure
 from app.api.v1.router import router
 from app.core.config import Settings, get_settings
 from app.core.exceptions import TradePilotError
-from app.db.base import Base
-from app.rag.in_memory import InMemoryKnowledgeStore
+from app.db.migrations import upgrade_database
+from app.rag.factory import KnowledgeStoreFactory, create_knowledge_store
+from app.statistics.factory import StatisticsProviderFactory, create_statistics_provider
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    *,
+    knowledge_store_factory: KnowledgeStoreFactory = create_knowledge_store,
+    statistics_provider_factory: StatisticsProviderFactory = create_statistics_provider,
+) -> FastAPI:
     resolved = settings or get_settings()
     connect_args = {"check_same_thread": False} if resolved.database_url.startswith("sqlite") else {}
     engine = create_engine(resolved.database_url, connect_args=connect_args)
@@ -25,10 +31,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(application: FastAPI):  # type: ignore[no-untyped-def]
         for path in (resolved.upload_dir, resolved.report_dir, resolved.chroma_dir):
             Path(path).mkdir(parents=True, exist_ok=True)
-        Base.metadata.create_all(engine)
+        upgrade_database(resolved.database_url)
         application.state.settings = resolved
         application.state.session_factory = session_factory
-        application.state.knowledge_store = InMemoryKnowledgeStore()
+        application.state.knowledge_store = knowledge_store_factory()
+        application.state.statistics_provider_factory = statistics_provider_factory
         yield
         engine.dispose()
 

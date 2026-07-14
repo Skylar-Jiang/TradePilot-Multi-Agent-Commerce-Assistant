@@ -111,3 +111,22 @@ def test_openapi_contains_only_the_ten_formal_v1_routes(tmp_path: Path) -> None:
     serialized = str(openapi).lower()
     assert "cucumber" not in serialized
     assert "fresh wholesale" not in serialized
+
+
+def test_every_v1_operation_declares_typed_success_and_unified_error_models(tmp_path: Path) -> None:
+    with make_client(tmp_path) as client:
+        openapi = client.get("/openapi.json").json()
+
+    operations = [
+        operation
+        for path in openapi["paths"].values()
+        for method, operation in path.items()
+        if method in {"get", "post"}
+    ]
+    assert len(operations) == 10
+    for operation in operations:
+        success_status = "201" if "201" in operation["responses"] else "200"
+        success_schema = operation["responses"][success_status]["content"]["application/json"]["schema"]
+        error_schema = operation["responses"]["422"]["content"]["application/json"]["schema"]
+        assert "ApiResponse" in success_schema["$ref"]
+        assert "ApiResponse" in error_schema["$ref"]

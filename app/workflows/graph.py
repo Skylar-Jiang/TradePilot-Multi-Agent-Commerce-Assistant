@@ -15,6 +15,8 @@ from app.agents.user_insight import UserInsightAgent
 from app.core.enums import AgentStatus, AuditStatus, KnowledgeType
 from app.rag.contracts import KnowledgeStore
 from app.schemas.common import AgentExecution
+from app.statistics.contracts import StatisticsProvider
+from app.statistics.stub import ScaffoldStatisticsProvider
 from app.workflows.state import TradePilotState
 
 PersistCallback = Callable[[TradePilotState], dict[str, object]]
@@ -29,6 +31,7 @@ class TradePilotWorkflow:
         self,
         *,
         knowledge_store: KnowledgeStore,
+        statistics_provider: StatisticsProvider | None = None,
         product_market_agent: ProductMarketAgent | None = None,
         user_insight_agent: UserInsightAgent | None = None,
         operations_decision_agent: OperationsDecisionAgent | None = None,
@@ -36,6 +39,7 @@ class TradePilotWorkflow:
         persist_callback: PersistCallback | None = None,
     ) -> None:
         self.knowledge_store = knowledge_store
+        self.statistics_provider = statistics_provider or ScaffoldStatisticsProvider()
         self.product_market_agent = product_market_agent or ProductMarketAgent()
         self.user_insight_agent = user_insight_agent or UserInsightAgent()
         self.operations_decision_agent = operations_decision_agent or OperationsDecisionAgent()
@@ -47,6 +51,7 @@ class TradePilotWorkflow:
         graph = StateGraph(TradePilotState)
         graph.add_node("input_validator", self._input_validator)
         graph.add_node("product_normalizer", self._product_normalizer)
+        graph.add_node("statistics_provider", self._statistics_provider)
         graph.add_node("product_market_agent", self._product_market)
         graph.add_node("user_insight_agent", self._user_insight)
         graph.add_node("operations_decision_agent", self._operations_decision)
@@ -54,8 +59,9 @@ class TradePilotWorkflow:
         graph.add_node("persist_and_export", self._persist_and_export)
         graph.add_edge(START, "input_validator")
         graph.add_edge("input_validator", "product_normalizer")
-        graph.add_edge("product_normalizer", "product_market_agent")
-        graph.add_edge("product_normalizer", "user_insight_agent")
+        graph.add_edge("product_normalizer", "statistics_provider")
+        graph.add_edge("statistics_provider", "product_market_agent")
+        graph.add_edge("statistics_provider", "user_insight_agent")
         graph.add_edge(
             ["product_market_agent", "user_insight_agent"],
             "operations_decision_agent",
@@ -102,12 +108,27 @@ class TradePilotWorkflow:
             "node_status": _execution("product_normalizer"),
         }
 
+    def _statistics_provider(self, state: TradePilotState) -> dict[str, object]:
+        result = self.statistics_provider.get_statistics(product=state.product_profile)
+        return {
+            "statistics_result": result,
+            "data_gaps": [*state.data_gaps, *result.data_gaps],
+            "current_node": "statistics_provider",
+            "node_status": _execution("statistics_provider", result.status),
+        }
+
     def _product_market(self, state: TradePilotState) -> dict[str, object]:
+        if state.statistics_result is None:
+            raise ValueError("statistics result is required")
         evidence = [
             item for item in state.rag_evidence if item.knowledge_type is KnowledgeType.PRODUCT_KNOWLEDGE
         ]
         output = self.product_market_agent.run(
-            ProductMarketAgentInput(product=state.product_profile, evidence=evidence)
+            ProductMarketAgentInput(
+                product=state.product_profile,
+                evidence=evidence,
+                statistics=state.statistics_result,
+            )
         )
         return {
             "product_market_analysis": output,
@@ -115,11 +136,17 @@ class TradePilotWorkflow:
         }
 
     def _user_insight(self, state: TradePilotState) -> dict[str, object]:
+        if state.statistics_result is None:
+            raise ValueError("statistics result is required")
         evidence = [
             item for item in state.rag_evidence if item.knowledge_type is KnowledgeType.REVIEW_INSIGHT
         ]
         output = self.user_insight_agent.run(
-            UserInsightAgentInput(product=state.product_profile, evidence=evidence)
+            UserInsightAgentInput(
+                product=state.product_profile,
+                evidence=evidence,
+                statistics=state.statistics_result,
+            )
         )
         return {
             "user_insight": output,
