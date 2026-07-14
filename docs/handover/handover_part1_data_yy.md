@@ -226,7 +226,6 @@ conda run -n shixun python scripts/init_db.py
 conda run --live-stream -n shixun python -u scripts/domain_imports/import_pet_supplies.py --metadata-input data/filtered/meta_pet_supplies_prefiltered.jsonl --reviews-input data/filtered/pet_supplies_reviews_prefiltered.jsonl
 conda run --live-stream -n shixun python -u scripts/domain_imports/clean_pet_supplies.py
 ```
-```
 
 ### 导入完成后的预期规模
 
