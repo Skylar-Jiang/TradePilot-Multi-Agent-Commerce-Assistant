@@ -1,0 +1,9 @@
+profile_id: pet_supplies
+display_name: TradePilot Pet Supplies
+data_origin: real
+implementation_status: scaffold
+adapter: app.adapters.domains.pet_supplies.PetSuppliesDomainAdapter
+knowledge_domains:
+  - product_knowledge
+  - review_insight
+notes: Real pet supplies metadata and review domain.

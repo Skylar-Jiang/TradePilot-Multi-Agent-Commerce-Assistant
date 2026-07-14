@@ -1,0 +1,1 @@
+"""Domain-specific adapter implementations."""
