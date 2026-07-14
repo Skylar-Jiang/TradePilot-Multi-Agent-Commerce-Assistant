@@ -1,5 +1,43 @@
 name: operation_content
-implementation_status: scaffold
+version: 1.0.0
 owner: teammate-three
-enabled: false
-description: Contract placeholder only; marketing content generation is not implemented.
+enabled: true
+description: Versioned deterministic rules for evidence-safe cross-border product content.
+rules:
+  title:
+    max_chars: 180
+  bullets:
+    count: 5
+    max_chars: 240
+  description:
+    max_chars: 1200
+    template: >-
+      {product_name} is presented for {audience} in {market}. {feature_sentence}
+      {scenario_sentence} Review the confirmed specifications, compatibility information,
+      and use limits before publishing or purchasing. Claims not present in the supplied
+      profile or cited evidence must remain recommendations rather than facts.
+  keywords:
+    max_items: 10
+  forbidden_claims:
+    - "#1"
+    - "100%"
+    - best
+    - cure
+    - "FDA approved"
+    - guaranteed
+    - "lowest price"
+    - perfect
+    - "risk-free"
+  customer_service_templates:
+    compatibility: >-
+      Thanks for asking about {product_name}. Please share the intended use and required
+      specifications so we can confirm compatibility from the verified product information.
+    shipping: >-
+      Thanks for your order. Shipping timing for {market} depends on the selected channel and
+      destination; please check the order page for the current tracked estimate.
+    issue: >-
+      We are sorry the product did not meet expectations. Please send the order number, a short
+      description of the issue, and a photo when relevant so support can review the next step.
+    returns: >-
+      Return eligibility depends on the selling channel and order status. Please share the order
+      number so support can confirm the applicable policy without making an unsupported promise.
