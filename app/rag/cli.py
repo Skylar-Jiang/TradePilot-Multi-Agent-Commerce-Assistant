@@ -9,9 +9,10 @@ from app.core.config import get_settings
 from app.core.enums import KnowledgeType
 from app.rag.chroma import ChromaKnowledgeStore
 from app.rag.embeddings import create_embedding_function
-from app.rag.evaluation import evaluate_collection, write_evaluation_report
+from app.rag.evaluation import build_gold_dataset, evaluate_dataset, load_gold_dataset, write_comparison
 from app.rag.importers import iter_filtered_documents, validate_source
 from app.rag.manifest import IndexManifest, ManifestStats
+from app.rag.reranker import Reranker
 
 
 class FileLock:
@@ -190,13 +191,50 @@ def query(args: argparse.Namespace) -> int:
 
 def evaluate(args: argparse.Namespace) -> int:
     store = _store(offline=args.offline_embeddings)
-    metrics = [
-        evaluate_collection(store, KnowledgeType.PRODUCT_KNOWLEDGE),
-        evaluate_collection(store, KnowledgeType.REVIEW_INSIGHT),
+    dataset_path = args.dataset
+    if args.build_dataset or not dataset_path.exists():
+        dataset = build_gold_dataset(store, dataset_path, per_collection=args.per_collection)
+    else:
+        dataset = load_gold_dataset(dataset_path)
+    if args.mode == "reranked":
+        reranker = Reranker(get_settings())
+    else:
+        reranker = None
+    metrics = evaluate_dataset(
+        store,
+        dataset,
+        mode=args.mode,
+        output_dir=args.output_dir,
+        top_k=args.top_k,
+        fetch_k=args.fetch_k,
+        reranker=reranker,
+        concurrency=args.concurrency,
+    )
+    payload = {
+        "dataset": str(dataset_path),
+        "output_dir": str(args.output_dir),
+        "metrics": [asdict(item) for item in metrics],
+    }
+    _print(payload, as_json=args.json)
+    return 0 if all(item.query_count and item.failed_query_count == 0 for item in metrics) else 4
+
+
+def compare(args: argparse.Namespace) -> int:
+    vector_metrics = [
+        item for item in load_metrics(args.vector_dir / "rag_evaluation.json")
     ]
-    write_evaluation_report(metrics, args.output_dir)
-    _print([asdict(item) for item in metrics], as_json=args.json)
-    return 0 if all(item.query_count and item.hit_at_5 >= 0.5 for item in metrics) else 4
+    reranked_metrics = [
+        item for item in load_metrics(args.reranked_dir / "rag_evaluation.json")
+    ]
+    write_comparison(vector_metrics, reranked_metrics, args.output_dir)
+    _print({"output_dir": str(args.output_dir)}, as_json=args.json)
+    return 0
+
+
+def load_metrics(path: Path):  # type: ignore[no-untyped-def]
+    from app.rag.evaluation import EvaluationMetrics
+
+    return [EvaluationMetrics(**item) for item in json.loads(path.read_text(encoding="utf-8"))]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -230,9 +268,21 @@ def build_parser() -> argparse.ArgumentParser:
     query_parser.set_defaults(func=query)
 
     eval_parser = sub.add_parser("evaluate", help="Run deterministic retrieval evaluation.")
-    eval_parser.add_argument("--source", type=Path, default=Path("data/filtered"))
+    eval_parser.add_argument("--dataset", type=Path, default=Path("data/eval/rag_gold.jsonl"))
     eval_parser.add_argument("--output-dir", type=Path, default=Path("data/reports/rag_eval"))
+    eval_parser.add_argument("--mode", choices=["vector_only", "reranked"], default="vector_only")
+    eval_parser.add_argument("--build-dataset", action="store_true")
+    eval_parser.add_argument("--per-collection", type=int, default=200)
+    eval_parser.add_argument("--top-k", type=int, default=5)
+    eval_parser.add_argument("--fetch-k", type=int, default=get_settings().rag_fetch_k)
+    eval_parser.add_argument("--concurrency", type=int, default=1)
     eval_parser.set_defaults(func=evaluate)
+
+    compare_parser = sub.add_parser("compare-eval", help="Compare vector and reranked evaluation outputs.")
+    compare_parser.add_argument("--vector-dir", type=Path, required=True)
+    compare_parser.add_argument("--reranked-dir", type=Path, required=True)
+    compare_parser.add_argument("--output-dir", type=Path, default=Path("data/reports/rag_eval"))
+    compare_parser.set_defaults(func=compare)
     return parser
 
 

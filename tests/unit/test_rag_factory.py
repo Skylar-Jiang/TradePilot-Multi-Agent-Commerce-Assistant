@@ -2,14 +2,20 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from app.core.config import Settings
+from app.core.config import Settings, get_settings
 from app.main import create_app
 from app.rag.factory import create_knowledge_store
 from app.rag.in_memory import InMemoryKnowledgeStore
 
 
-def test_default_knowledge_store_factory_is_lightweight_memory() -> None:
-    assert isinstance(create_knowledge_store(), InMemoryKnowledgeStore)
+def test_default_knowledge_store_factory_is_lightweight_memory(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.delenv("RAG_USE_CHROMA", raising=False)
+    monkeypatch.setenv("RAG_USE_CHROMA", "false")
+    get_settings.cache_clear()
+    try:
+        assert isinstance(create_knowledge_store(), InMemoryKnowledgeStore)
+    finally:
+        get_settings.cache_clear()
 
 
 def test_app_uses_injected_knowledge_store_factory(tmp_path: Path) -> None:
