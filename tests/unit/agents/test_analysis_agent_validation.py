@@ -1,3 +1,4 @@
+from langchain_core.language_models.fake_chat_models import FakeListChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
 
@@ -118,3 +119,26 @@ def test_user_agent_normalizes_model_string_data_gaps(demo_product: ProductProfi
 
     assert output.data_gaps[0].reason == "缺少更广泛评论"
     assert output.conclusions[0].data_gaps[0].reason == "样本量有限"
+
+
+def test_product_agent_records_bounded_structured_output_retry(demo_product: ProductProfile) -> None:
+    product = demo_product.model_copy(update={"data_origin": DataOrigin.REAL})
+    model = FakeListChatModel(
+        responses=[
+            "not-json",
+            '{"status":"succeeded","product_summary":"同类市场分析",'
+            '"evidence_ids":["ev-1"],"conclusions":[],"data_gaps":[]}',
+        ]
+    )
+
+    output = ProductMarketAgent(model=model).run(
+        ProductMarketAgentInput(
+            product=product,
+            evidence=[_evidence(product)],
+            statistics=build_scaffold_statistics(product),
+        )
+    )
+
+    assert output.model_call_count == 2
+    assert output.parse_retry_count == 1
+    assert output.structured_output_parser == "PydanticOutputParser"

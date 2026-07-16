@@ -28,6 +28,10 @@ class ScaffoldAgentOutput(BaseModel):
     statistics_result_ids: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
+    model_call_count: int = Field(default=0, ge=0)
+    parse_retry_count: int = Field(default=0, ge=0)
+    token_usage: dict[str, int] | None = None
+    structured_output_parser: str | None = None
     scaffold_note: str = "Deterministic scaffold output; deferred business analysis is not implemented."
 
 
@@ -99,6 +103,10 @@ class AuditResult(BaseModel):
     conflicting_evidence_ids: list[str] = Field(default_factory=list)
     unresolved_questions: list[str] = Field(default_factory=list)
     manual_review_required: bool = False
+    model_call_count: int = Field(default=0, ge=0)
+    parse_retry_count: int = Field(default=0, ge=0)
+    token_usage: dict[str, int] | None = None
+    structured_output_parser: str | None = None
 
 
 class AnalysisRunCreate(BaseModel):

@@ -10,7 +10,9 @@ from langchain_core.prompts import ChatPromptTemplate
 
 from app.agents.base import BaseScaffoldAgent
 from app.agents.contracts import EvidenceAuditAgentInput
-from app.agents.model_factory import create_audit_model, parse_json_object
+from app.agents.model_factory import create_audit_model
+from app.agents.structured_output import invoke_structured
+from app.core.config import get_settings
 from app.core.enums import AgentStatus, AuditStatus, DataMode, DataOrigin, ImplementationStatus
 from app.schemas.analysis import AuditResult
 from app.schemas.common import Conclusion
@@ -36,6 +38,8 @@ PEER_ATTRIBUTION_FORBIDDEN = (
     "该商品用户普遍认为",
     "当前商品差评",
 )
+NUMERIC_SOURCE_PATTERN = r"(?<![A-Za-z0-9_.-])\d+(?:\.\d+)?%?(?![A-Za-z0-9_.-])"
+NUMERIC_CLAIM_PATTERN = r"(?<![A-Za-z0-9_.-])\d+(?:\.\d+)?%?"
 AUDIT_SYSTEM_PROMPT = """
 You are TradePilot EvidenceAuditAgent. Audit an unlisted new-product plan against supplied peer evidence and structured
 statistics. Check peer-review attribution, peer_group_id, accessories, numeric sources, reasoned-hypothesis labeling,
@@ -85,8 +89,10 @@ class EvidenceAuditAgent(BaseScaffoldAgent[EvidenceAuditAgentInput, AuditResult]
         if context.product.data_mode is not DataMode.REAL and context.product.data_origin is not DataOrigin.REAL:
             return deterministic
         model = self.model or create_audit_model()
-        message = (self.prompt | model).invoke(
-            {
+        result = invoke_structured(
+            prompt=self.prompt,
+            model=model,
+            values={
                 "product": context.product.model_dump_json(indent=2),
                 "plan": context.operation_plan.model_dump_json(indent=2),
                 "evidence": json.dumps(
@@ -113,9 +119,26 @@ class EvidenceAuditAgent(BaseScaffoldAgent[EvidenceAuditAgentInput, AuditResult]
                     else "null"
                 ),
                 "peer_group_id": context.peer_group_id or "not supplied",
+            },
+            output_model=AuditResult,
+            normalize=lambda payload: self._postprocess_model(payload, deterministic, context),
+            max_parse_retries=get_settings().model_parse_max_retries,
+        )
+        return result.value.model_copy(
+            update={
+                "model_call_count": result.model_call_count,
+                "parse_retry_count": result.parse_retry_count,
+                "token_usage": result.token_usage,
+                "structured_output_parser": result.parser_name,
             }
         )
-        payload: dict[str, Any] = parse_json_object(str(message.content))
+
+    def _postprocess_model(
+        self,
+        payload: dict[str, Any],
+        deterministic: AuditResult,
+        context: EvidenceAuditAgentInput,
+    ) -> AuditResult:
         valid_evidence_ids = {item.evidence_id for item in context.evidence}
         declared_evidence_ids = set(context.operation_plan.evidence_ids)
         evidence_less_hypotheses = [
@@ -337,7 +360,7 @@ class EvidenceAuditAgent(BaseScaffoldAgent[EvidenceAuditAgentInput, AuditResult]
         if context.statistics is not None:
             allowed_payload["statistics"] = context.statistics.model_dump(mode="json")
         allowed_text = json.dumps(allowed_payload, ensure_ascii=False, default=str)
-        allowed_numbers = set(re.findall(r"(?<![\w-])\d+(?:\.\d+)?%?(?![\w-])", allowed_text))
+        allowed_numbers = set(re.findall(NUMERIC_SOURCE_PATTERN, allowed_text))
         for value in list(allowed_numbers):
             try:
                 rounded = Decimal(value.removesuffix("%")).quantize(Decimal("0.01"))
@@ -348,7 +371,7 @@ class EvidenceAuditAgent(BaseScaffoldAgent[EvidenceAuditAgentInput, AuditResult]
         for label, text, conclusion_type in self._claim_texts(context):
             if conclusion_type == "user_input":
                 continue
-            for value in re.findall(r"(?<![\w-])\d+(?:\.\d+)?%?", text):
+            for value in re.findall(NUMERIC_CLAIM_PATTERN, text):
                 if value not in allowed_numbers:
                     issues.append(
                         f"{label}.unverified_numeric_claim: Remove {value!r} or bind it to validated structured "

@@ -11,8 +11,9 @@ from app.agents.model_factory import (
     normalize_evidence_ids,
     normalize_model_data_gaps,
     normalize_text_list,
-    parse_json_object,
 )
+from app.agents.structured_output import invoke_structured
+from app.core.config import get_settings
 from app.core.enums import AgentStatus, DataMode, DataOrigin, ImplementationStatus
 from app.rag.pipeline import RetrievalPipeline, user_provided_evidence
 from app.schemas.analysis import UserInsight
@@ -97,8 +98,10 @@ class UserInsightAgent(BaseScaffoldAgent[UserInsightAgentInput, UserInsight]):
         evidence_ids = [item.evidence_id for item in context.evidence]
         if context.product.data_mode is DataMode.REAL or context.product.data_origin is DataOrigin.REAL:
             model = self.model or create_analysis_model()
-            message = (self.prompt | model).invoke(
-                {
+            result = invoke_structured(
+                prompt=self.prompt,
+                model=model,
+                values={
                     "product": context.product.model_dump_json(indent=2),
                     "peer_context": str(
                         {
@@ -109,9 +112,19 @@ class UserInsightAgent(BaseScaffoldAgent[UserInsightAgentInput, UserInsight]):
                     ),
                     "statistics": context.statistics.model_dump_json(indent=2),
                     "evidence": self._format_evidence(context.evidence),
+                },
+                output_model=UserInsight,
+                normalize=lambda payload: self._postprocess(payload, context),
+                max_parse_retries=get_settings().model_parse_max_retries,
+            )
+            return result.value.model_copy(
+                update={
+                    "model_call_count": result.model_call_count,
+                    "parse_retry_count": result.parse_retry_count,
+                    "token_usage": result.token_usage,
+                    "structured_output_parser": result.parser_name,
                 }
             )
-            return self._postprocess(parse_json_object(str(message.content)), context)
         return self._deterministic_analysis(context, evidence_ids)
 
     def _run_stub(self, context: UserInsightAgentInput) -> UserInsight:

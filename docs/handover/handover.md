@@ -17,7 +17,11 @@
 - Independent runtime SQLite plus small `product_knowledge` and `review_insight` Chroma collections.
 - Backward-compatible `exact_product` retrieval and production `peer_group` retrieval.
 - Real peer-group SQL statistics separated from review interpretation.
+- Main peer-group Chroma retrieval uses configurable MMR and records its selection strategy; the exact-product
+  evaluation pipeline retains optional external reranking with explicit use/fallback metadata.
 - Four real model-backed LCEL Agents in one LangGraph; the first two truly overlap.
+- All four Real Agents terminate in `PydanticOutputParser`, retry only malformed JSON/Schema output within a separate
+  bound, and persist model-call/parse-retry/token-usage metadata.
 - Conditional Qwen image understanding with magic-byte validation and visible-attribute-only output.
 - Deterministic evidence audit for peer attribution/scope, accessories, numeric sources, hypothesis labels, evidence
   existence, semantic conflicts, and known-risk conflicts; model findings are retained as advisory warnings.
@@ -28,6 +32,8 @@
   audit records, and append-only rollback.
 - Optional dated/jurisdiction-scoped product-background provider contract; the default provides no external facts.
 - Explicit failed-run persistence and no Real-to-Demo/Mock fallback.
+- Environment-aware `.env` plus `.env.<APP_ENV>` loading, safe request logs, and programmatic migrations that do not
+  replace application logging handlers.
 
 ## Validated real run (2026-07-15)
 
@@ -60,14 +66,33 @@
 - Independent official-image smoke verified `qwen3-vl-plus` in 2,710 ms; no reliable candidate image was supplied, so
   the candidate workflow correctly skipped vision rather than using a peer image.
 
+## Excellence-gate validation (2026-07-16)
+
+- Clean real HTTP run `5cef095f-1f8c-4d2b-8327-d542e33e768f` succeeded after the typed-parser/MMR/logging changes:
+  20 peers, 89 review documents, 109 total small-Chroma documents, MMR 0.7, and true parallel Agent overlap.
+- All four Agent outputs recorded `PydanticOutputParser`, one real model call, zero parse retries and actual provider
+  token usage. Request logs contained the allow-listed request metadata only.
+- Report inspection found and fixed a Chinese-unit decimal boundary bug. A second real run found and fixed an object
+  shaped `positioning` response by routing it into the bounded parse retry.
+- An intermediate post-fix rerun was externally blocked by DeepSeek HTTP 402 `Insufficient Balance`; Real mode
+  persisted the failure without fallback. Deterministic regression covers both defects found before that run.
+
+Balance was subsequently restored and final run `33855f70-0be7-4dbb-a0c3-d70627fadb4f` succeeded with audit `pass`,
+true parallel overlap, four single-call typed Agents, MMR 0.7, 20 peers, 89 review documents and a 73,845 ms total HTTP
+duration. Final Markdown inspection confirmed sourced decimals, Chinese user-facing narrative, all required sections,
+and no forbidden candidate-review attribution or Demo/Scaffold text. A transient Windows HNSW segment-reader failure
+encountered during the clean rebuild is now covered by a bounded read retry and a deterministic regression test.
+Final local gates are 154 passed and 3 opt-in skips; `pip check`, compileall, Ruff and Smoke Test all pass.
+
 ## Operational sequence
 
 1. Restore Git LFS source files.
 2. Copy `.env.example` to ignored `.env` and add local provider keys.
-3. Run `python scripts/prepare_peer_data.py` offline.
-4. Start uvicorn and create a Real candidate product.
-5. Upload a candidate image only when it is reliable and belongs to that candidate.
-6. Start analysis, then consume metadata/SSE/report endpoints.
+3. Optionally copy `.env.development.example` or `.env.production.example` to the corresponding ignored overlay.
+4. Run `python scripts/prepare_peer_data.py` offline.
+5. Start uvicorn and create a Real candidate product.
+6. Upload a candidate image only when it is reliable and belongs to that candidate.
+7. Start analysis, then consume metadata/SSE/report endpoints.
 
 ## Boundaries and limitations
 

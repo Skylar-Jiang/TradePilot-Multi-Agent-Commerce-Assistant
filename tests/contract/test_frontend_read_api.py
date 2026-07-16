@@ -65,6 +65,10 @@ def test_frontend_read_endpoints_are_repository_backed_and_typed(tmp_path: Path)
     }
     assert all("display_name" in item and "responsibility" in item for item in agents.json()["data"]["agents"])
     assert all("provider" in item and "model_name" in item for item in agents.json()["data"]["agents"])
+    assert all(
+        {"model_call_count", "parse_retry_count", "structured_output_parser", "token_usage"} <= set(item)
+        for item in agents.json()["data"]["agents"]
+    )
     assert all(item["real_model_called"] is False for item in agents.json()["data"]["agents"])
     assert workflow.status_code == 200
     assert {node["node_name"] for node in workflow.json()["data"]["nodes"]} >= {

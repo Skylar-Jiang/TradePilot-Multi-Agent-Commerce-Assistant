@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from langchain_core.language_models.fake_chat_models import FakeListChatModel
 from langchain_core.runnables import RunnableSequence
 
 from app.agents.contracts import EvidenceAuditAgentInput, OperationsDecisionAgentInput
@@ -213,3 +214,49 @@ def test_audit_accepts_two_decimal_rounding_of_structured_statistics(
     )
 
     assert not any("30.76" in issue for issue in audit.issues)
+
+
+def test_numeric_guard_preserves_valid_decimal_before_chinese_unit() -> None:
+    value = OperationsDecisionAgent._sanitize_numeric_text(
+        "目标售价299.99美元，市场均价453.37美元。",
+        {"299.99", "453.37"},
+    )
+
+    assert value == "目标售价299.99美元，市场均价453.37美元。"
+    assert OperationsDecisionAgent._sanitize_numeric_text("噪音低于18dB。", set()) == "噪音低于待验证数值dB。"
+
+
+def test_operations_agent_retries_when_positioning_has_wrong_schema(
+    demo_product: ProductProfile,
+) -> None:
+    product = demo_product.model_copy(update={"data_origin": DataOrigin.REAL})
+    market = ProductMarketAnalysis(
+        status=AgentStatus.SUCCEEDED,
+        data_origin=DataOrigin.REAL,
+        evidence_ids=["market-1"],
+    )
+    insight = UserInsight(
+        status=AgentStatus.SUCCEEDED,
+        data_origin=DataOrigin.REAL,
+        evidence_ids=["review-1"],
+    )
+    model = FakeListChatModel(
+        responses=[
+            '{"positioning":{"summary":"错误结构"},"evidence_ids":["market-1"],'
+            '"conclusions":[],"data_gaps":[],"next_steps":[]}',
+            '{"positioning":"面向目标用户的证据约束上市定位","evidence_ids":["market-1"],'
+            '"conclusions":[],"data_gaps":[],"next_steps":[]}',
+        ]
+    )
+
+    plan = OperationsDecisionAgent(model=model).run(
+        OperationsDecisionAgentInput(
+            product=product,
+            product_market_analysis=market,
+            user_insight=insight,
+        )
+    )
+
+    assert plan.positioning == "面向目标用户的证据约束上市定位"
+    assert plan.model_call_count == 2
+    assert plan.parse_retry_count == 1

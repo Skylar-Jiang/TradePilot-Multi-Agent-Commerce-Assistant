@@ -20,6 +20,10 @@ different/missing categories, same-main-category negative examples, no global la
 temporary `product_id` values, invalidation by catalog/config/selected-ASIN changes, threshold metadata, and an
 under-10 result that is deliberately not filled.
 
+Engineering-gate tests also verify environment-specific dotenv precedence and path validation, safe HTTP request
+logging, bounded Pydantic parse retries, provider-error non-retry behavior, token-usage aggregation, Chroma MMR
+diversification and external-reranker trace metadata.
+
 Real final acceptance additionally requires:
 
 1. Run `scripts/prepare_peer_data.py` cold, then hot, and record both cache timings.

@@ -121,5 +121,9 @@ def test_pipeline_conditional_rerank_preserves_scores() -> None:
         product()
     )
     assert bundle.rerank_used
+    assert bundle.selection_strategy == "external_rerank"
+    assert bundle.rerank_policy == "conditional"
+    assert bundle.rerank_model == "fake-rerank"
+    assert bundle.rerank_candidate_count == 2
     assert bundle.evidence[0].metadata["rerank_score"] is not None
     assert bundle.evidence[0].metadata["vector_score"] is not None

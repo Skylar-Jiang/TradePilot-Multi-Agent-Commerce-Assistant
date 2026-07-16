@@ -201,3 +201,49 @@ def test_chroma_adapter_filters_peer_group_without_requiring_new_product_id(tmp_
     assert result.status is AgentStatus.SUCCEEDED
     assert {item.metadata["peer_group_id"] for item in result.evidence} == {"wanted"}
     assert {item.metadata["evidence_scope"] for item in result.evidence} == {"peer_product"}
+    assert {item.metadata["selection_strategy"] for item in result.evidence} == {"mmr"}
+    assert {item.metadata["mmr_lambda"] for item in result.evidence} == {0.7}
+
+
+def test_mmr_prefers_semantically_diverse_candidate_over_near_duplicate() -> None:
+    ordered = ChromaKnowledgeStore._mmr_order(
+        [
+            ("best", 0.95, [1.0, 0.0]),
+            ("near-duplicate", 0.94, [0.99, 0.01]),
+            ("diverse", 0.85, [0.0, 1.0]),
+        ],
+        lambda_mult=0.5,
+    )
+
+    assert ordered[:2] == ["best", "diverse"]
+
+
+def test_chroma_query_retries_transient_segment_reader_failure(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    class FlakyCollection:
+        calls = 0
+
+        def query(self, **_kwargs):  # type: ignore[no-untyped-def]
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("Error creating hnsw segment reader: Nothing found on disk")
+            return {"ids": [["ok"]]}
+
+    store = object.__new__(ChromaKnowledgeStore)
+    store.query_max_retries = 2
+    store.query_retry_delay_seconds = 0
+    monkeypatch.setattr(
+        store,
+        "_fallback_query",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("segment not ready")),
+    )
+    collection = FlakyCollection()
+
+    result = store._query_with_recovery(
+        collection,
+        query="water fountain",
+        where={"peer_group_id": "group"},
+        n_results=5,
+    )
+
+    assert result == {"ids": [["ok"]]}
+    assert collection.calls == 2

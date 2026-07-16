@@ -35,6 +35,10 @@ class RetrievalBundle:
     rerank_used: bool = False
     rerank_fallback: bool = False
     rerank_fallback_reason: str | None = None
+    selection_strategy: str = "vector_diversification"
+    rerank_policy: str = "conditional"
+    rerank_model: str | None = None
+    rerank_candidate_count: int = 0
     latency_ms: float = 0.0
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
@@ -188,6 +192,12 @@ class RetrievalPipeline:
             rerank_used=rerank_used,
             rerank_fallback=rerank_fallback,
             rerank_fallback_reason=rerank_fallback_reason,
+            selection_strategy="external_rerank" if rerank_used else "vector_diversification",
+            rerank_policy=self.settings.rerank_policy,
+            rerank_model=self.reranker.model_name or None,
+            rerank_candidate_count=(
+                min(len(deduped), self.settings.rerank_max_candidates) if rerank_requested else 0
+            ),
             latency_ms=(time.perf_counter() - started) * 1000,
             warnings=[*warnings, *sufficiency.warnings],
             errors=errors,

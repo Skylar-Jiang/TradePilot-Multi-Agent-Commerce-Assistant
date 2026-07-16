@@ -1,11 +1,15 @@
+import logging
 from dataclasses import dataclass
 from pathlib import Path
+from time import sleep
 from typing import Any
 
 from app.core.enums import AgentStatus, DataOrigin, KnowledgeType, RetrievalScope
 from app.rag.contracts import KnowledgeDocument
 from app.schemas.common import DataGap
 from app.schemas.evidence import EvidenceReference, RetrievalResult
+
+logger = logging.getLogger("tradepilot.rag.chroma")
 
 
 @dataclass(slots=True)
@@ -26,6 +30,10 @@ class ChromaKnowledgeStore:
         *,
         collection_names: dict[KnowledgeType, str] | None = None,
         score_threshold: float = 0.0,
+        mmr_enabled: bool = True,
+        mmr_lambda: float = 0.7,
+        query_max_retries: int = 3,
+        query_retry_delay_seconds: float = 0.1,
     ) -> None:
         import chromadb
 
@@ -33,6 +41,10 @@ class ChromaKnowledgeStore:
         self.embedding_function = embedding_function
         self.collection_names = collection_names or {item: item.value for item in KnowledgeType}
         self.score_threshold = score_threshold
+        self.mmr_enabled = mmr_enabled
+        self.mmr_lambda = mmr_lambda
+        self.query_max_retries = query_max_retries
+        self.query_retry_delay_seconds = query_retry_delay_seconds
 
     def _collection(self, knowledge_type: KnowledgeType):  # type: ignore[no-untyped-def]
         return self.client.get_or_create_collection(
@@ -152,19 +164,18 @@ class ChromaKnowledgeStore:
                 ],
             )
         n_results = min(fetch_k or max(top_k, 10), collection_count)
-        try:
-            result = collection.query(
-                query_texts=[query],
-                n_results=n_results,
-                where=where,
-                include=["documents", "metadatas", "distances"],
-            )
-        except Exception:
-            result = self._fallback_query(collection, query=query, where=where, n_results=n_results)
+        result = self._query_with_recovery(
+            collection,
+            query=query,
+            where=where,
+            n_results=n_results,
+        )
         ids = result.get("ids", [[]])[0]
         documents = result.get("documents", [[]])[0]
         metadatas = result.get("metadatas", [[]])[0]
         distances = result.get("distances", [[]])[0]
+        raw_embeddings = result.get("embeddings")
+        embeddings = raw_embeddings[0] if raw_embeddings is not None and len(raw_embeddings) else []
         if not ids:
             return RetrievalResult(
                 status=AgentStatus.INSUFFICIENT_EVIDENCE,
@@ -177,10 +188,29 @@ class ChromaKnowledgeStore:
                     )
                 ],
             )
+        rows = list(zip(ids, documents, metadatas, distances, embeddings, strict=False))
+        selection_strategy = "similarity"
+        if self.mmr_enabled and rows and all(
+            len(list(row[4]) if row[4] is not None else []) > 0 for row in rows
+        ):
+            order = self._mmr_order(
+                [
+                    (
+                        str(row[0]),
+                        max(0.0, 1.0 - float(row[3] or 0.0)),
+                        list(row[4]) if row[4] is not None else [],
+                    )
+                    for row in rows
+                ],
+                lambda_mult=self.mmr_lambda,
+            )
+            position = {item_id: index for index, item_id in enumerate(order)}
+            rows.sort(key=lambda row: position[str(row[0])])
+            selection_strategy = "mmr"
         evidence = []
         seen_parent_ids: set[str] = set()
         seen_review_ids: set[str] = set()
-        for evidence_id, excerpt, metadata, distance in zip(ids, documents, metadatas, distances, strict=True):
+        for evidence_id, excerpt, metadata, distance, _embedding in rows:
             metadata = metadata or {}
             score = max(0.0, 1.0 - float(distance or 0.0))
             if score < self.score_threshold:
@@ -217,6 +247,8 @@ class ChromaKnowledgeStore:
                         "collection": self.collection_names[knowledge_type],
                         "retrieval_score": score,
                         "query": query,
+                        "selection_strategy": selection_strategy,
+                        "mmr_lambda": self.mmr_lambda if selection_strategy == "mmr" else None,
                     },
                 )
             )
@@ -310,8 +342,11 @@ class ChromaKnowledgeStore:
         query_embedding = self._query_embedding(query)
         scored = []
         for item_id, document, metadata, embedding in zip(ids, documents, metadatas, embeddings, strict=False):
-            distance = 1.0 - self._cosine(query_embedding, list(embedding or []))
-            scored.append((distance, item_id, document, metadata))
+            distance = 1.0 - self._cosine(
+                query_embedding,
+                list(embedding) if embedding is not None else [],
+            )
+            scored.append((distance, item_id, document, metadata, embedding))
         scored.sort(key=lambda item: item[0])
         selected = scored[:n_results]
         return {
@@ -319,7 +354,79 @@ class ChromaKnowledgeStore:
             "documents": [[item[2] for item in selected]],
             "metadatas": [[item[3] for item in selected]],
             "distances": [[item[0] for item in selected]],
+            "embeddings": [[item[4] for item in selected]],
         }
+
+    def _query_with_recovery(
+        self,
+        collection,  # type: ignore[no-untyped-def]
+        *,
+        query: str,
+        where: dict[str, object],
+        n_results: int,
+    ) -> dict[str, Any]:
+        last_error: Exception | None = None
+        for attempt in range(self.query_max_retries):
+            try:
+                return collection.query(
+                    query_texts=[query],
+                    n_results=n_results,
+                    where=where,
+                    include=["documents", "metadatas", "distances", "embeddings"],
+                )
+            except Exception as query_error:
+                last_error = query_error
+                try:
+                    return self._fallback_query(
+                        collection,
+                        query=query,
+                        where=where,
+                        n_results=n_results,
+                    )
+                except Exception as fallback_error:
+                    last_error = fallback_error
+            if attempt + 1 < self.query_max_retries:
+                logger.warning(
+                    "chroma_query_retry",
+                    extra={
+                        "event": "chroma_query_retry",
+                        "attempt": attempt + 1,
+                        "max_retries": self.query_max_retries,
+                        "error_type": type(last_error).__name__,
+                    },
+                )
+                sleep(self.query_retry_delay_seconds * (attempt + 1))
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("Chroma query failed without an error")
+
+    @staticmethod
+    def _mmr_order(
+        candidates: list[tuple[str, float, list[float]]],
+        *,
+        lambda_mult: float,
+    ) -> list[str]:
+        """Order candidates by maximal marginal relevance using their stored vectors."""
+        if not candidates:
+            return []
+        indexed = list(enumerate(candidates))
+        first = max(indexed, key=lambda item: (item[1][1], -item[0]))
+        selected = [first]
+        remaining = [item for item in indexed if item[0] != first[0]]
+        while remaining:
+            def mmr_score(item: tuple[int, tuple[str, float, list[float]]]) -> tuple[float, float, int]:
+                _, (_, relevance, embedding) = item
+                redundancy = max(
+                    ChromaKnowledgeStore._cosine(embedding, selected_item[1][2])
+                    for selected_item in selected
+                )
+                score = lambda_mult * relevance - (1 - lambda_mult) * redundancy
+                return score, relevance, -item[0]
+
+            chosen = max(remaining, key=mmr_score)
+            selected.append(chosen)
+            remaining.remove(chosen)
+        return [item[1][0] for item in selected]
 
     def _query_embedding(self, query: str) -> list[float]:
         if hasattr(self.embedding_function, "embed_query"):

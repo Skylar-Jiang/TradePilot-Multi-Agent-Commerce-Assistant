@@ -13,12 +13,16 @@ from app.agents.model_factory import (
     normalize_evidence_ids,
     normalize_model_data_gaps,
     normalize_text_list,
-    parse_json_object,
 )
+from app.agents.structured_output import invoke_structured
+from app.core.config import get_settings
 from app.core.enums import AgentStatus, DataMode, DataOrigin, ImplementationStatus
 from app.schemas.analysis import OperationPlan
 from app.schemas.common import Conclusion, DataGap
 from app.skills.operation_content import OperationContentSkill
+
+NUMERIC_SOURCE_PATTERN = r"(?<![A-Za-z0-9_.-])\d+(?:\.\d+)?%?(?![A-Za-z0-9_.-])"
+NUMERIC_CLAIM_PATTERN = r"(?<![A-Za-z0-9_.-])\d+(?:\.\d+)?%?"
 
 OPERATIONS_SYSTEM_PROMPT = """
 You are TradePilot OperationsDecisionAgent. The target is an unlisted new product with no sales or reviews.
@@ -67,8 +71,10 @@ class OperationsDecisionAgent(BaseScaffoldAgent[OperationsDecisionAgentInput, Op
 
     def _run_model(self, context: OperationsDecisionAgentInput) -> OperationPlan:
         model = self.model or create_operations_model()
-        message = (self.prompt | model).invoke(
-            {
+        result = invoke_structured(
+            prompt=self.prompt,
+            model=model,
+            values={
                 "product": context.product.model_dump_json(indent=2),
                 "peer_scope": str(
                     {
@@ -85,9 +91,21 @@ class OperationsDecisionAgent(BaseScaffoldAgent[OperationsDecisionAgentInput, Op
                 "statistics": context.statistics.model_dump_json(indent=2) if context.statistics else "null",
                 "market": self._compact_analysis(context.product_market_analysis),
                 "insight": self._compact_analysis(context.user_insight),
+            },
+            output_model=OperationPlan,
+            normalize=lambda payload: self._postprocess(payload, context),
+            max_parse_retries=get_settings().model_parse_max_retries,
+        )
+        return result.value.model_copy(
+            update={
+                "model_call_count": result.model_call_count,
+                "parse_retry_count": result.parse_retry_count,
+                "token_usage": result.token_usage,
+                "structured_output_parser": result.parser_name,
             }
         )
-        payload: dict[str, Any] = parse_json_object(str(message.content))
+
+    def _postprocess(self, payload: dict[str, Any], context: OperationsDecisionAgentInput) -> OperationPlan:
         payload = normalize_model_data_gaps(payload, field="operations_decision")
         allowed_ids = set(
             context.product_market_analysis.evidence_ids + context.user_insight.evidence_ids
@@ -135,7 +153,10 @@ class OperationsDecisionAgent(BaseScaffoldAgent[OperationsDecisionAgentInput, Op
         )
         payload.setdefault("data_gaps", [])
         payload["next_steps"] = normalize_text_list(payload.get("next_steps", []))
-        payload.setdefault("positioning", "")
+        positioning = payload.get("positioning", "")
+        if not isinstance(positioning, str):
+            raise ValueError("OperationPlan.positioning must be a string")
+        payload["positioning"] = positioning.strip()
         content = self.content_skill.build(product=context.product, positioning=payload["positioning"])
         payload["next_steps"] = [*payload["next_steps"], *content.as_next_steps()]
         allowed_numbers = self._allowed_numbers(context)
@@ -156,7 +177,7 @@ class OperationsDecisionAgent(BaseScaffoldAgent[OperationsDecisionAgentInput, Op
             source["statistics"] = context.statistics.model_dump(mode="json")
         values = set(
             re.findall(
-                r"(?<![\w-])\d+(?:\.\d+)?%?(?![\w-])",
+                NUMERIC_SOURCE_PATTERN,
                 json.dumps(source, ensure_ascii=False, default=str),
             )
         )
@@ -176,7 +197,7 @@ class OperationsDecisionAgent(BaseScaffoldAgent[OperationsDecisionAgentInput, Op
             number = match.group(0)
             return number if number in allowed_numbers else "待验证数值"
 
-        return re.sub(r"(?<![\w-])\d+(?:\.\d+)?%?", replace, text)
+        return re.sub(NUMERIC_CLAIM_PATTERN, replace, text)
 
     @staticmethod
     def _compact_analysis(value: Any) -> str:

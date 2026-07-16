@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
+from time import perf_counter
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
@@ -12,6 +13,7 @@ from app.api.v1.router import router
 from app.background.registry import BackgroundProviderRegistry
 from app.core.config import Settings, get_settings
 from app.core.exceptions import TradePilotError
+from app.core.logging import configure_logging, log_http_request
 from app.db.migrations import upgrade_database
 from app.rag.factory import KnowledgeStoreFactory, create_knowledge_store
 from app.rag.in_memory import InMemoryKnowledgeStore
@@ -27,6 +29,7 @@ def create_app(
     background_registry: BackgroundProviderRegistry | None = None,
 ) -> FastAPI:
     resolved = settings or get_settings()
+    configure_logging(resolved.log_level)
     connect_args = (
         {"check_same_thread": False, "timeout": 30}
         if resolved.database_url.startswith("sqlite")
@@ -88,8 +91,27 @@ def create_app(
     @application.middleware("http")
     async def request_id_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
         request.state.request_id = request.headers.get("X-Request-ID", str(uuid4()))
-        response = await call_next(request)
+        started_at = perf_counter()
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            log_http_request(
+                request_id=request.state.request_id,
+                method=request.method,
+                path=request.url.path,
+                status_code=500,
+                started_at=started_at,
+                error=exc,
+            )
+            raise
         response.headers["X-Request-ID"] = request.state.request_id
+        log_http_request(
+            request_id=request.state.request_id,
+            method=request.method,
+            path=request.url.path,
+            status_code=response.status_code,
+            started_at=started_at,
+        )
         return response
 
     @application.exception_handler(TradePilotError)

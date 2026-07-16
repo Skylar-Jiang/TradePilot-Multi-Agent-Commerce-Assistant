@@ -50,3 +50,10 @@ immutable version; rollback also creates a new version and never mutates history
 
 Common Real-mode errors include `llm_not_configured`, `data_preparation_required`, `knowledge_unavailable`, and
 `workflow_failed`. `/openapi.json` is the authoritative typed frontend contract.
+
+Each item returned by `/analysis-runs/{run_id}/agents` additionally exposes `model_call_count`,
+`parse_retry_count`, `structured_output_parser`, and provider `token_usage` when available. `retry_count` at the run
+level remains the EvidenceAudit-to-Operations workflow retry and is intentionally separate from output-format retries.
+
+The server returns `X-Request-ID` and writes a matching HTTP log record containing only method, path, status and
+duration. Request query strings, bodies, headers and credentials are excluded from application logs.

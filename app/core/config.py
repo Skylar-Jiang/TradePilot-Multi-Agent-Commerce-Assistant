@@ -1,8 +1,12 @@
+import os
+import re
 from functools import lru_cache
 from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_ENVIRONMENT_NAME = re.compile(r"^[a-z0-9_-]+$")
 
 
 class Settings(BaseSettings):
@@ -40,6 +44,7 @@ class Settings(BaseSettings):
     model_temperature: float = 0.1
     model_timeout_seconds: int = 120
     model_max_retries: int = 3
+    model_parse_max_retries: int = Field(default=1, ge=0, le=2)
     model_max_tokens: int = 4096
 
     embedding_model: str | None = None
@@ -60,6 +65,10 @@ class Settings(BaseSettings):
     rag_review_fetch_k: int = 30
     rag_top_k: int = 8
     rag_score_threshold: float = 0.0
+    rag_mmr_enabled: bool = True
+    rag_mmr_lambda: float = Field(default=0.7, ge=0, le=1)
+    rag_query_max_retries: int = Field(default=3, ge=1, le=5)
+    rag_query_retry_delay_seconds: float = Field(default=0.1, ge=0, le=2)
     rag_max_per_source: int = 3
     rag_min_product_evidence: int = 1
     rag_min_review_evidence: int = 3
@@ -95,6 +104,28 @@ class Settings(BaseSettings):
         return provider_models or legacy_single_provider
 
 
+def environment_dotenv_files() -> tuple[Path, Path]:
+    """Return shared and environment-specific dotenv files without permitting path traversal."""
+    environment = os.getenv("APP_ENV") or _read_dotenv_value(Path(".env"), "APP_ENV") or "development"
+    normalized = environment.strip().lower()
+    if not _ENVIRONMENT_NAME.fullmatch(normalized):
+        raise ValueError("APP_ENV must contain only lowercase letters, digits, '_' or '-'")
+    return Path(".env"), Path(f".env.{normalized}")
+
+
+def _read_dotenv_value(path: Path, key: str) -> str | None:
+    if not path.is_file():
+        return None
+    for raw_line in path.read_text(encoding="utf-8-sig").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, value = line.removeprefix("export ").split("=", 1)
+        if name.strip() == key:
+            return value.strip().strip("'\"")
+    return None
+
+
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    return Settings()
+    return Settings(_env_file=environment_dotenv_files())

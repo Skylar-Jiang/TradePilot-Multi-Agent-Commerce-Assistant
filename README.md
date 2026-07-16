@@ -36,6 +36,11 @@ python -m alembic upgrade head
 
 Fill `DEEPSEEK_API_KEY` and `QWEN_API_KEY` only in the ignored `.env`. Never commit that file.
 
+The application reads shared values from `.env`, then overlays `.env.<APP_ENV>`. For example, copy
+`.env.development.example` to the ignored `.env.development` for local paths, or copy
+`.env.production.example` to `.env.production` for production paths. Set `APP_ENV` in the process environment or
+shared `.env`; environment names are validated before a file path is constructed.
+
 ## Prepare real peer data offline
 
 ```powershell
@@ -74,6 +79,17 @@ consume the persisted `/events` SSE stream, which supports `Last-Event-ID` repla
 evidence, audit, metadata, Markdown, JSON, immutable report versions, evidence explanations, local section edits and
 rollback are available from the endpoints in `docs/api-contract.md`. Frontend integration and report-support rules are
 documented in `docs/frontend-integration.md` and `docs/report-support.md`.
+
+Every HTTP request writes one allow-listed application log record with request ID, method, path, status and duration.
+Query strings, bodies, headers and credentials are never logged. Real Agent output uses an LCEL
+`prompt | model | normalization | PydanticOutputParser` chain. Malformed JSON or Schema output is retried only up to
+`MODEL_PARSE_MAX_RETRIES`; provider retries remain separately bounded by `MODEL_MAX_RETRIES`.
+
+The peer-group Chroma path applies MMR over the bounded vector candidates (`RAG_MMR_ENABLED` and
+`RAG_MMR_LAMBDA`). The separate exact-product evaluation pipeline can additionally use the configured external
+reranker. MMR and rerank strategy/model metadata remain attached to retrieval results for traceability. Transient
+post-upsert HNSW segment-reader errors receive only the bounded `RAG_QUERY_MAX_RETRIES` read retry; no cache/index
+rebuild or Demo/Mock fallback occurs.
 
 ## Verify
 
