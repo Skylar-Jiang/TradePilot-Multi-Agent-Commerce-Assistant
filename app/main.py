@@ -29,6 +29,7 @@ def create_app(
     background_registry: BackgroundProviderRegistry | None = None,
 ) -> FastAPI:
     resolved = settings or get_settings()
+    uses_default_knowledge_store = knowledge_store_factory is create_knowledge_store
     configure_logging(resolved.log_level)
     connect_args = (
         {"check_same_thread": False, "timeout": 30}
@@ -52,6 +53,9 @@ def create_app(
             else knowledge_store_factory()
         )
 
+    def demo_worker_knowledge_store():  # type: ignore[no-untyped-def]
+        return InMemoryKnowledgeStore() if uses_default_knowledge_store else worker_knowledge_store()
+
     @asynccontextmanager
     async def lifespan(application: FastAPI):  # type: ignore[no-untyped-def]
         for path in (resolved.upload_dir, resolved.report_dir, resolved.chroma_dir, resolved.chroma_persist_dir):
@@ -73,7 +77,9 @@ def create_app(
             settings=resolved,
             statistics_provider_factory=statistics_provider_factory,
             background_registry=application.state.background_registry,
+            demo_knowledge_store_factory=demo_worker_knowledge_store,
         )
+        application.state.run_dispatcher.recover_pending()
         yield
         application.state.run_dispatcher.shutdown()
         engine.dispose()

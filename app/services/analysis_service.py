@@ -9,8 +9,15 @@ from app.background.contracts import BackgroundQuery
 from app.background.registry import BackgroundProviderRegistry
 from app.core.config import Settings
 from app.core.enums import DataMode, ErrorCode, KnowledgeType, RetrievalScope, RunStageStatus, RunStatus
-from app.core.exceptions import LLMNotConfiguredError, ScaffoldOnlyError, TradePilotError
+from app.core.exceptions import (
+    DataPreparationRequiredError,
+    LLMNotConfiguredError,
+    ScaffoldOnlyError,
+    TradePilotError,
+)
 from app.db.repositories.sqlalchemy import SqlAlchemyAnalysisRepository, SqlAlchemyProductRepository
+from app.domain.product_catalog import ProductCatalog
+from app.domain.review_lookup import ReviewLookup
 from app.rag.contracts import KnowledgeStore
 from app.schemas.analysis import AnalysisRunCreate, AnalysisRunRead
 from app.schemas.evidence import EvidenceReference
@@ -21,6 +28,59 @@ from app.services.report_exporter import ReportExporter
 from app.statistics.contracts import StatisticsProvider
 from app.workflows.graph import TradePilotWorkflow
 from app.workflows.state import TradePilotState
+
+
+def _is_git_lfs_pointer(path: Path) -> bool:
+    try:
+        with path.open("rb") as source:
+            return source.read(128).startswith(b"version https://git-lfs.github.com/spec/v1")
+    except OSError:
+        return False
+
+
+def validate_real_readiness(settings: Settings) -> None:
+    if not settings.real_model_configured:
+        raise LLMNotConfiguredError()
+    if not settings.rag_use_chroma:
+        raise ScaffoldOnlyError("real")
+
+    embedding_model = (settings.embedding_model or "").strip()
+    if not embedding_model:
+        raise LLMNotConfiguredError("Real mode requires EMBEDDING_MODEL for peer matching and Chroma retrieval")
+    if embedding_model.startswith("text-embedding-"):
+        if not settings.qwen_api_key:
+            raise LLMNotConfiguredError(
+                f"Real mode embedding model {embedding_model} requires QWEN_API_KEY"
+            )
+    elif not settings.openai_api_key:
+        raise LLMNotConfiguredError(
+            f"Real mode embedding model {embedding_model} requires OPENAI_API_KEY"
+        )
+
+    source_paths = (
+        (settings.peer_metadata_path, "product metadata"),
+        (settings.peer_reviews_path, "review data"),
+    )
+    for source_path, label in source_paths:
+        if not source_path.is_file():
+            raise DataPreparationRequiredError(
+                f"{label} source",
+                action="download the peer source data, then run python scripts/prepare_peer_data.py",
+            )
+        if _is_git_lfs_pointer(source_path):
+            raise DataPreparationRequiredError(
+                f"{label} source",
+                action="run git lfs pull, then run python scripts/prepare_peer_data.py",
+            )
+
+    ProductCatalog.open_prepared(
+        settings.peer_metadata_path,
+        settings.peer_cache_dir / "product_catalog.sqlite",
+    )
+    ReviewLookup.open_prepared(
+        settings.peer_reviews_path,
+        settings.peer_cache_dir / "review_lookup.sqlite",
+    )
 
 
 class AnalysisService:
@@ -63,10 +123,7 @@ class AnalysisService:
 
     def create(self, payload: AnalysisRunCreate) -> AnalysisRunRead:
         if payload.data_mode is DataMode.REAL:
-            if not self.settings.real_model_configured:
-                raise LLMNotConfiguredError()
-            if not self.settings.rag_use_chroma:
-                raise ScaffoldOnlyError("real")
+            validate_real_readiness(self.settings)
         if payload.data_mode is DataMode.MOCK:
             raise ScaffoldOnlyError("mock")
         self.products.get(payload.product_id)

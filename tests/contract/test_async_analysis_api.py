@@ -4,11 +4,20 @@ from pathlib import Path
 from threading import Event
 
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 from app.core.config import Settings
+from app.core.enums import DataMode, DataOrigin
+from app.core.exceptions import LLMNotConfiguredError
+from app.db.migrations import upgrade_database
 from app.db.models.core import Product
+from app.db.repositories.sqlalchemy import SqlAlchemyAnalysisRepository, SqlAlchemyProductRepository
 from app.main import create_app
 from app.rag.in_memory import InMemoryKnowledgeStore
+from app.schemas.analysis import AnalysisRunCreate
+from app.schemas.product import ProductCreate
+from app.services.analysis_service import AnalysisService
 
 
 def _settings(tmp_path: Path) -> Settings:
@@ -177,3 +186,87 @@ def test_background_database_failure_rolls_back_before_persisting_failed_status(
 
     assert run["status"] == "failed"
     assert run["state"]["error"]["type"] == "IntegrityError"
+
+
+def test_demo_dispatch_uses_memory_when_real_chroma_credentials_are_missing(tmp_path: Path) -> None:
+    settings = _settings(tmp_path).model_copy(
+        update={"rag_use_chroma": True, "embedding_model": "text-embedding-v4"}
+    )
+    with TestClient(create_app(settings)) as client:
+        product = client.post(
+            "/api/v1/products",
+            json={"name": "Demo without Qwen", "category": "demo", "data_mode": "demo"},
+        ).json()["data"]
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={"product_id": product["product_id"], "data_mode": "demo"},
+        )
+        run_id = response.json()["data"]["run_id"]
+        for _ in range(200):
+            run = client.get(f"/api/v1/analysis-runs/{run_id}").json()["data"]
+            if run["status"] == "succeeded":
+                break
+            time.sleep(0.01)
+
+    assert response.status_code == 202
+    assert run["status"] == "succeeded"
+
+
+def test_worker_store_initialization_failure_is_persisted(tmp_path: Path) -> None:
+    calls = 0
+
+    def store_factory():  # type: ignore[no-untyped-def]
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return InMemoryKnowledgeStore()
+        raise LLMNotConfiguredError("embedding credentials missing")
+
+    with TestClient(create_app(_settings(tmp_path), knowledge_store_factory=store_factory)) as client:
+        product = client.post(
+            "/api/v1/products",
+            json={"name": "Factory failure", "category": "demo", "data_mode": "demo"},
+        ).json()["data"]
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={"product_id": product["product_id"], "data_mode": "demo"},
+        )
+        run_id = response.json()["data"]["run_id"]
+        for _ in range(200):
+            run = client.get(f"/api/v1/analysis-runs/{run_id}").json()["data"]
+            if run["status"] == "failed":
+                break
+            time.sleep(0.01)
+        timeline = client.get(f"/api/v1/analysis-runs/{run_id}/timeline").json()["data"]
+
+    assert run["status"] == "failed"
+    assert run["current_node"] == "workflow_failed"
+    assert run["state"]["error"]["code"] == "llm_not_configured"
+    assert timeline["stages"][0]["status"] == "failed"
+
+
+def test_startup_recovers_previously_pending_runs(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    upgrade_database(settings.database_url)
+    engine = create_engine(settings.database_url, connect_args={"check_same_thread": False})
+    session_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    with session_factory() as session:
+        product = SqlAlchemyProductRepository(session).create(
+            ProductCreate(name="Recovered demo", category="demo", data_mode=DataMode.DEMO),
+            data_origin=DataOrigin.DEMO,
+        )
+        repository = SqlAlchemyAnalysisRepository(session)
+        pending = repository.create_run(
+            AnalysisRunCreate(product_id=product.product_id, data_mode=DataMode.DEMO)
+        )
+        repository.initialize_stages(pending.run_id, AnalysisService.STAGE_KEYS)
+    engine.dispose()
+
+    with TestClient(create_app(settings)) as client:
+        for _ in range(200):
+            run = client.get(f"/api/v1/analysis-runs/{pending.run_id}").json()["data"]
+            if run["status"] == "succeeded":
+                break
+            time.sleep(0.01)
+
+    assert run["status"] == "succeeded"

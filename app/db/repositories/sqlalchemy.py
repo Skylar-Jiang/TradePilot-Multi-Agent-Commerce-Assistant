@@ -91,6 +91,16 @@ class SqlAlchemyAnalysisRepository:
             raise ResourceNotFoundError("analysis_run", run_id)
         return self._to_run(record)
 
+    def list_run_ids(self, statuses: set[RunStatus]) -> list[str]:
+        if not statuses:
+            return []
+        statement = (
+            select(AnalysisRun.run_id)
+            .where(AnalysisRun.status.in_([status.value for status in statuses]))
+            .order_by(AnalysisRun.created_at)
+        )
+        return list(self.session.scalars(statement).all())
+
     def get_run_request(self, run_id: str) -> dict[str, Any]:
         record = self.session.get(AnalysisRun, run_id)
         if record is None:

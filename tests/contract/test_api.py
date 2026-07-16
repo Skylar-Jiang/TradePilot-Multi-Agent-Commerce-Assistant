@@ -78,6 +78,73 @@ def test_real_mode_without_model_configuration_is_explicit_503(tmp_path: Path) -
     assert response.json()["error"]["code"] == "llm_not_configured"
 
 
+def test_real_mode_rejects_missing_qwen_embedding_credentials_before_queueing(tmp_path: Path) -> None:
+    settings = Settings(
+        _env_file=None,
+        database_url=f"sqlite:///{tmp_path / 'missing-embedding.db'}",
+        report_dir=tmp_path / "reports",
+        upload_dir=tmp_path / "uploads",
+        chroma_dir=tmp_path / "chroma",
+        chroma_persist_dir=tmp_path / "chroma",
+        rag_use_chroma=True,
+        openai_api_key="minimax-test-placeholder",
+        openai_base_url="https://api.minimaxi.com/v1",
+        model_analysis="MiniMax-M3",
+        embedding_model="text-embedding-v4",
+    )
+    with TestClient(create_app(settings)) as client:
+        product = client.post(
+            "/api/v1/products",
+            json={"name": "Real product", "category": "pet", "data_mode": "real"},
+        ).json()["data"]
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={"product_id": product["product_id"], "data_mode": "real"},
+        )
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "llm_not_configured"
+    assert "QWEN_API_KEY" in response.json()["error"]["message"]
+
+
+def test_real_mode_detects_git_lfs_peer_sources_before_queueing(tmp_path: Path) -> None:
+    metadata_path = tmp_path / "metadata.jsonl"
+    reviews_path = tmp_path / "reviews.jsonl"
+    lfs_pointer = "version https://git-lfs.github.com/spec/v1\noid sha256:test\nsize 123\n"
+    metadata_path.write_text(lfs_pointer, encoding="utf-8")
+    reviews_path.write_text(lfs_pointer, encoding="utf-8")
+    settings = Settings(
+        _env_file=None,
+        database_url=f"sqlite:///{tmp_path / 'lfs-preflight.db'}",
+        report_dir=tmp_path / "reports",
+        upload_dir=tmp_path / "uploads",
+        chroma_dir=tmp_path / "chroma",
+        chroma_persist_dir=tmp_path / "chroma",
+        rag_use_chroma=True,
+        openai_api_key="minimax-test-placeholder",
+        openai_base_url="https://api.minimaxi.com/v1",
+        qwen_api_key="qwen-test-placeholder",
+        model_analysis="MiniMax-M3",
+        embedding_model="text-embedding-v4",
+        peer_metadata_path=metadata_path,
+        peer_reviews_path=reviews_path,
+        peer_cache_dir=tmp_path / "cache",
+    )
+    with TestClient(create_app(settings)) as client:
+        product = client.post(
+            "/api/v1/products",
+            json={"name": "Real product", "category": "pet", "data_mode": "real"},
+        ).json()["data"]
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={"product_id": product["product_id"], "data_mode": "real"},
+        )
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "data_preparation_required"
+    assert "git lfs pull" in response.json()["error"]["message"]
+
+
 def test_mock_and_configured_real_never_fall_back_to_demo(tmp_path: Path) -> None:
     with make_client(tmp_path) as client:
         mock = client.post(

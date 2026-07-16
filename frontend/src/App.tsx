@@ -232,9 +232,11 @@ function App() {
     () => new Map(timeline.map((stage) => [stage.stage_key, stage])),
     [timeline],
   )
+  const runActive = runId !== null && (runStatus === null || !terminalStatuses.includes(runStatus))
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (busy || runActive) return
     setBusy(true)
     setError('')
     setRunId(null)
@@ -413,6 +415,7 @@ function App() {
                     name="mode"
                     value="demo"
                     checked={mode === 'demo'}
+                    disabled={busy || runActive}
                     onChange={() => setMode('demo')}
                   />
                   <span><strong>Demo</strong><small>快速体验完整流程</small></span>
@@ -423,6 +426,7 @@ function App() {
                     name="mode"
                     value="real"
                     checked={mode === 'real'}
+                    disabled={busy || runActive}
                     onChange={() => setMode('real')}
                   />
                   <span><strong>Real</strong><small>真实模型与同类数据</small></span>
@@ -534,10 +538,10 @@ function App() {
                 </div>
               )}
 
-              <button className="primary-button" type="submit" disabled={busy || connected === false}>
-                {busy ? <Pulse className="spin" weight="bold" /> : <Play weight="fill" />}
-                {busy ? '正在创建任务…' : '启动智能分析'}
-                {!busy && <ArrowRight weight="bold" />}
+              <button className="primary-button" type="submit" disabled={busy || runActive || connected === false}>
+                {busy || runActive ? <Pulse className="spin" weight="bold" /> : <Play weight="fill" />}
+                {busy ? '正在创建任务…' : runActive ? '智能分析执行中…' : '启动智能分析'}
+                {!busy && !runActive && <ArrowRight weight="bold" />}
               </button>
               <p className="submit-note">
                 {mode === 'real'

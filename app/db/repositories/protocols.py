@@ -22,6 +22,8 @@ class AnalysisRepository(Protocol):
 
     def get_run(self, run_id: str) -> AnalysisRunRead: ...
 
+    def list_run_ids(self, statuses: set[RunStatus]) -> list[str]: ...
+
     def update_run(
         self,
         run_id: str,

@@ -31,10 +31,11 @@ class ScaffoldOnlyError(TradePilotError):
 
 
 class DataPreparationRequiredError(TradePilotError):
-    def __init__(self, component: str, *, stale: bool = False):
+    def __init__(self, component: str, *, stale: bool = False, action: str | None = None):
         state = "stale" if stale else "missing"
+        resolution = action or "run the explicit prepare_peer_data command first"
         super().__init__(
             ErrorCode.DATA_PREPARATION_REQUIRED,
-            f"Prepared {component} cache is {state}; run the explicit prepare_peer_data command first",
+            f"Prepared {component} cache is {state}; {resolution}",
             503,
         )

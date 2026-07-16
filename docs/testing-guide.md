@@ -27,6 +27,8 @@ diversification and external-reranker trace metadata.
 Real final acceptance additionally requires:
 
 1. Run `scripts/prepare_peer_data.py` cold, then hot, and record both cache timings.
+   If the source JSONL files are Git LFS pointers, run `git lfs pull` before preparing caches. Real API requests now
+   reject missing LFS content, missing/stale caches, and missing Embedding credentials before a run is queued.
 2. Run a `data_mode=real` HTTP request against uvicorn, using a client with `trust_env=False` if a workstation proxy
    interferes with provider TLS.
 3. Assert run `status=succeeded`, four persisted Agent outputs, `parallel_agent_overlap=true`, only threshold-qualified
