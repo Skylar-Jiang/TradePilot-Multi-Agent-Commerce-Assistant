@@ -39,3 +39,45 @@ def test_qwen_models_disable_thinking_for_structured_output(monkeypatch) -> None
     model_factory.create_operations_model(settings)
 
     assert captured["extra_body"] == {"enable_thinking": False}
+
+
+def test_operations_model_supports_deepseek_without_qwen(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    captured: dict[str, object] = {}
+
+    def fake_chat_openai(**kwargs):  # type: ignore[no-untyped-def]
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(model_factory, "ChatOpenAI", fake_chat_openai)
+    settings = Settings(
+        _env_file=None,
+        deepseek_api_key="test-deepseek-key",
+        model_report="deepseek-v4-flash",
+    )
+
+    model_factory.create_operations_model(settings)
+
+    assert captured["api_key"] == "test-deepseek-key"
+    assert captured["model"] == "deepseek-v4-flash"
+    assert captured["extra_body"] == {"thinking": {"type": "disabled"}}
+
+
+def test_audit_model_supports_deepseek_without_qwen(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    captured: dict[str, object] = {}
+
+    def fake_chat_openai(**kwargs):  # type: ignore[no-untyped-def]
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(model_factory, "ChatOpenAI", fake_chat_openai)
+    settings = Settings(
+        _env_file=None,
+        deepseek_api_key="test-deepseek-key",
+        model_fast="deepseek-v4-flash",
+    )
+
+    model_factory.create_audit_model(settings)
+
+    assert captured["api_key"] == "test-deepseek-key"
+    assert captured["model"] == "deepseek-v4-flash"
+    assert captured["extra_body"] == {"thinking": {"type": "disabled"}}

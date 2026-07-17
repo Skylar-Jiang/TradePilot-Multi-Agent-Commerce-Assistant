@@ -50,20 +50,58 @@ def create_analysis_model(settings: Settings | None = None) -> BaseChatModel:
 
 def create_operations_model(settings: Settings | None = None) -> BaseChatModel:
     resolved = settings or get_settings()
+    if resolved.qwen_api_key and resolved.model_report:
+        return _create_qwen_model(resolved, resolved.model_report)
+    if resolved.deepseek_api_key and resolved.model_report:
+        logger.info(
+            "creating operations model via analysis-compatible provider",
+            extra={"model_name": resolved.model_report, "provider": "deepseek"},
+        )
+        return ChatOpenAI(
+            model=resolved.model_report,
+            base_url=resolved.deepseek_base_url,
+            api_key=resolved.deepseek_api_key,
+            temperature=resolved.model_temperature,
+            timeout=resolved.model_timeout_seconds,
+            max_retries=resolved.model_max_retries,
+            max_tokens=resolved.model_max_tokens,
+            model_kwargs={"response_format": {"type": "json_object"}},
+            extra_body={"thinking": {"type": "disabled"}},
+        )
     if not (resolved.qwen_api_key and resolved.model_report):
         if resolved.openai_api_key and resolved.model_analysis:
             return create_analysis_model(resolved)
-        raise LLMNotConfiguredError("Real operations Agent requires QWEN_API_KEY and MODEL_REPORT")
-    return _create_qwen_model(resolved, resolved.model_report)
+        raise LLMNotConfiguredError(
+            "Real operations Agent requires DEEPSEEK_API_KEY or QWEN_API_KEY, plus MODEL_REPORT"
+        )
 
 
 def create_audit_model(settings: Settings | None = None) -> BaseChatModel:
     resolved = settings or get_settings()
+    if resolved.qwen_api_key and resolved.model_fast:
+        return _create_qwen_model(resolved, resolved.model_fast)
+    if resolved.deepseek_api_key and resolved.model_fast:
+        logger.info(
+            "creating audit model via analysis-compatible provider",
+            extra={"model_name": resolved.model_fast, "provider": "deepseek"},
+        )
+        return ChatOpenAI(
+            model=resolved.model_fast,
+            base_url=resolved.deepseek_base_url,
+            api_key=resolved.deepseek_api_key,
+            temperature=resolved.model_temperature,
+            timeout=resolved.model_timeout_seconds,
+            max_retries=resolved.model_max_retries,
+            max_tokens=resolved.model_max_tokens,
+            model_kwargs={"response_format": {"type": "json_object"}},
+            extra_body={"thinking": {"type": "disabled"}},
+        )
     if not (resolved.qwen_api_key and resolved.model_fast):
         if resolved.openai_api_key and resolved.model_analysis:
             return create_analysis_model(resolved)
-        raise LLMNotConfiguredError("Real evidence audit Agent requires QWEN_API_KEY and MODEL_FAST")
-    return _create_qwen_model(resolved, resolved.model_fast)
+        raise LLMNotConfiguredError(
+            "Real evidence audit Agent requires DEEPSEEK_API_KEY or QWEN_API_KEY, plus MODEL_FAST"
+        )
 
 
 def create_vision_model(settings: Settings | None = None) -> BaseChatModel:

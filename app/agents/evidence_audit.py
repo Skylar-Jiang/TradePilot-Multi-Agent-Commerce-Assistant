@@ -359,6 +359,8 @@ class EvidenceAuditAgent(BaseScaffoldAgent[EvidenceAuditAgentInput, AuditResult]
         allowed_payload: dict[str, object] = {"product": context.product.model_dump(mode="json")}
         if context.statistics is not None:
             allowed_payload["statistics"] = context.statistics.model_dump(mode="json")
+        if context.background_context is not None:
+            allowed_payload["background_context"] = context.background_context.model_dump(mode="json")
         allowed_text = json.dumps(allowed_payload, ensure_ascii=False, default=str)
         allowed_numbers = set(re.findall(NUMERIC_SOURCE_PATTERN, allowed_text))
         for value in list(allowed_numbers):

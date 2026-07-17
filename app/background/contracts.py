@@ -37,6 +37,7 @@ class BackgroundResult(BaseModel):
     query: BackgroundQuery
     evidence: list[BackgroundEvidence] = Field(default_factory=list)
     text: str = ""
+    decision_inputs: dict[str, object] = Field(default_factory=dict)
     data_gaps: list[DataGap] = Field(default_factory=list)
 
 

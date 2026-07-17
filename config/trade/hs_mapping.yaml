@@ -1,0 +1,90 @@
+version: "2026-07-16"
+market: "United States"
+jurisdiction: "US"
+mappings:
+  - segment_id: fountains
+    product_types:
+      - Fountains
+      - pet water fountain
+      - cat water fountain
+      - dog water fountain
+    keywords:
+      - pet fountain
+      - water fountain
+      - cat fountain
+      - dog fountain
+    hs_codes:
+      - hs_code: "8421210000"
+        confidence: 0.74
+        rationale: "Phase 1 maps the existing Fountains category to candidate HTS 8421210000 for pet drinking fountain imports pending broker review."
+    notes: "Aligned to the existing project category `Fountains`. Use as a candidate import classification only; final customs classification still requires human review."
+  - segment_id: collars_and_harness_articles
+    product_types:
+      - Basic Collars
+      - Collars
+      - Pinch Collars
+      - Slip & Martingale Collars
+      - Harnesses
+      - Dog Harnesses
+      - dog harness
+      - dog collar
+      - Vest Harnesses
+      - Basic Halter Harnesses
+      - Headcollars
+      - Vehicle Harnesses
+    keywords:
+      - collar
+      - harness
+      - martingale
+    hs_codes:
+      - hs_code: "4201006000"
+        confidence: 0.7
+        rationale: "Phase 1 maps existing collar and harness categories to candidate HTS 4201006000 as saddlery and harness articles for animals."
+    notes: "Aligned to existing project categories for collars and harnesses. Applies to ordinary restraint goods, not electronics."
+  - segment_id: leashes
+    product_types:
+      - Basic Leashes
+      - Leashes
+      - dog leash
+      - pet leash
+      - Training Leashes
+      - Retractable Leashes
+      - Hands Free Leashes
+      - Double Leashes
+    keywords:
+      - leash
+      - lead
+    hs_codes:
+      - hs_code: "4201006000"
+        confidence: 0.68
+        rationale: "Phase 1 maps the existing Basic Leashes category to candidate HTS 4201006000 together with other animal restraint articles."
+    notes: "Aligned to the existing project category `Basic Leashes`. Phase 1 assumes standard leash construction and does not distinguish specialty control devices."
+  - segment_id: mixed_restraint_articles
+    product_types:
+      - Collars, Harnesses & Leashes
+      - Dog harnesses & leashes
+    keywords:
+      - collar
+      - harness
+      - leash
+    hs_codes:
+      - hs_code: "4201006000"
+        confidence: 0.62
+        rationale: "Maps mixed restraint-article catalog buckets to candidate HTS 4201006000 when the existing project category already groups collars, harnesses, and leashes together."
+    notes: "Aligned to existing mixed restraint categories already present in project data. Use only as a candidate import classification for ordinary non-electronic animal restraint goods; final customs classification still requires human review."
+  - segment_id: shampoos
+    product_types:
+      - Shampoos
+      - dog shampoo
+      - cat shampoo
+      - pet shampoo
+    keywords:
+      - shampoo
+      - dog shampoo
+      - cat shampoo
+      - pet shampoo
+    hs_codes:
+      - hs_code: "3305100000"
+        confidence: 0.78
+        rationale: "Phase 1 maps the existing Shampoos category to candidate HTS 3305100000 because the current HTS schedule contains an explicit shampoos heading."
+    notes: "Aligned to the existing project category `Shampoos`. This is still a candidate customs classification and should be reviewed when medicinal or specialty formulations are involved."
