@@ -15,6 +15,8 @@ import {
   Package,
   Play,
   Pulse,
+  Receipt,
+  Scales,
   ShieldCheck,
   SidebarSimple,
   UploadSimple,
@@ -35,7 +37,42 @@ import {
 } from './api'
 import { productCategoryOptions, targetMarketOptions } from './catalogOptions'
 
-type PageKey = 'workspace' | 'agents' | 'audit' | 'report'
+type PageKey = 'workspace' | 'agents' | 'tariff' | 'audit' | 'report'
+
+type TariffEvidence = {
+  evidence_id?: string
+  summary?: string
+  source_name?: string
+  source_uri?: string
+  effective_date?: string | null
+  confidence?: number | null
+}
+
+type TariffProfile = {
+  hs_code?: string
+  product_scope?: string
+  general_rate?: string
+  special_rate_text?: string
+  additional_duty_text?: string
+  confidence?: number | null
+}
+
+type TariffSnapshot = {
+  provider?: string
+  market?: string
+  jurisdiction?: string
+  effective_date?: string | null
+  tariff_evidence?: TariffEvidence[]
+  data_gaps?: Array<{ field?: string; reason?: string }>
+}
+
+type TariffImpact = {
+  summary?: string
+  risk_flags?: string[]
+  manual_review_required?: boolean
+  selection_impact?: string[]
+  primary_tariff_profile?: TariffProfile
+}
 
 type FormState = {
   name: string
@@ -109,6 +146,7 @@ const agentDefinitions = [
 const navigation: Array<{ key: PageKey; label: string; caption: string; icon: typeof Lightning }> = [
   { key: 'workspace', label: '任务创建', caption: '真实商品分析', icon: Lightning },
   { key: 'agents', label: 'Agent 协作', caption: '四角色流程', icon: FlowArrow },
+  { key: 'tariff', label: '关税合规', caption: '美国 HTS 证据', icon: Receipt },
   { key: 'audit', label: '证据审校', caption: '风险与护栏', icon: ShieldCheck },
   { key: 'report', label: '决策报告', caption: 'Markdown 输出', icon: FileText },
 ]
@@ -154,6 +192,18 @@ function statusIcon(status?: string) {
   }
   if (status === 'running') return <Pulse weight="bold" />
   return <Clock weight="regular" />
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+}
+
+function tariffSections(report: ReportView | null) {
+  const snapshot = asRecord(report?.sections.tax_and_tariff_snapshot) as TariffSnapshot | null
+  const impact = asRecord(report?.sections.tariff_selection_impact) as TariffImpact | null
+  return { snapshot, impact }
 }
 
 function ParticleField() {
@@ -307,6 +357,10 @@ function App() {
     : Math.min(96, Math.round((completedCount / stageCount) * 100))
   const auditStatus = audit?.status || (runStatus === 'manual_review' ? 'warning' : 'pending')
   const currentStageName = workflow?.nodes.find((node) => node.node_name === currentNode)?.display_name || currentNode
+  const { snapshot: tariffSnapshot, impact: tariffImpact } = tariffSections(report)
+  const tariffProfile = tariffImpact?.primary_tariff_profile || null
+  const tariffEvidence = tariffSnapshot?.tariff_evidence || []
+  const tariffGaps = tariffSnapshot?.data_gaps || []
 
   const navigate = (target: PageKey) => {
     window.location.hash = target
@@ -374,7 +428,7 @@ function App() {
 
           <div className="real-notice">
             <span><Lightning weight="fill" /></span>
-            <div><strong>真实模型链路</strong><small>MiniMax-M3 · Qwen Embedding · Qwen3-VL · 实际同类数据</small></div>
+            <div><strong>真实模型链路</strong><small>MiniMax-M3 · Qwen Embedding · Qwen3-VL · 同类数据 · 美国 HTS</small></div>
           </div>
 
           <div className="field-grid two-columns">
@@ -462,7 +516,7 @@ function App() {
           <h2>四个 Agent，完成一次可审计决策</h2>
           <p>市场分析与用户洞察并行运行，运营决策汇总信号，证据审校最后把关。</p>
           <ol className="mini-process">
-            <li><span>01</span><div><strong>真实数据准备</strong><small>同行匹配 · RAG · SQL</small></div></li>
+            <li><span>01</span><div><strong>真实数据准备</strong><small>同行匹配 · RAG · SQL · HTS 税则</small></div></li>
             <li><span>02</span><div><strong>双 Agent 并行分析</strong><small>市场 + 用户洞察</small></div></li>
             <li><span>03</span><div><strong>决策与证据审校</strong><small>允许一次审校退回</small></div></li>
           </ol>
@@ -508,7 +562,7 @@ function App() {
         <div className={`agent-flow ${runActive ? 'is-running' : ''}`}>
           <div className={`prep-node status-${stageMap.get('statistics_provider')?.status || 'pending'}`}>
             <span><Database weight="duotone" /></span>
-            <div><small>DATA PREP</small><strong>同类数据与 RAG 准备</strong></div>
+            <div><small>DATA PREP</small><strong>同类数据、RAG 与 HTS 税则准备</strong></div>
             <b>{statusIcon(stageMap.get('statistics_provider')?.status)}</b>
           </div>
           <div className="flow-line line-down"><i /></div>
@@ -601,6 +655,76 @@ function App() {
     </div>
   )
 
+  const renderTariff = () => (
+    <div className="page-view page-tariff">
+      <PageHeader
+        eyebrow="TARIFF & LANDED COST"
+        title="美国关税与选品影响"
+        description="基于最新 main 分支的本地 HTS 税则数据，展示候选税号、税率证据以及对 landed cost 和毛利的影响。"
+        action={<span className={`status-pill ${tariffImpact?.manual_review_required ? 'status-warning' : tariffSnapshot ? 'status-pass' : 'status-pending'}`}>
+          {statusIcon(tariffImpact?.manual_review_required ? 'warning' : tariffSnapshot ? 'pass' : 'pending')}
+          {tariffImpact?.manual_review_required ? '需人工归类复核' : tariffSnapshot ? '税则证据已载入' : '等待美国市场任务'}
+        </span>}
+      />
+
+      {tariffSnapshot || tariffImpact ? (
+        <>
+          <section className="tariff-metrics" aria-label="关税关键指标">
+            <article className="glass-panel tariff-metric primary">
+              <span><Receipt weight="duotone" /></span>
+              <div><small>CANDIDATE HTS</small><strong>{tariffProfile?.hs_code || '待确定'}</strong><p>{tariffProfile?.product_scope || '尚未形成可用的税号匹配。'}</p></div>
+            </article>
+            <article className="glass-panel tariff-metric">
+              <span><Scales weight="duotone" /></span>
+              <div><small>GENERAL RATE</small><strong>{tariffProfile?.general_rate || '未知'}</strong><p>{tariffProfile?.additional_duty_text ? '存在附加税文本，请纳入到岸成本。' : '未识别到附加税文本。'}</p></div>
+            </article>
+            <article className="glass-panel tariff-metric">
+              <span><ShieldCheck weight="duotone" /></span>
+              <div><small>MAPPING CONFIDENCE</small><strong>{typeof tariffProfile?.confidence === 'number' ? `${Math.round(tariffProfile.confidence * 100)}%` : '未知'}</strong><p>候选归类仅用于选品前测算，不替代报关行正式意见。</p></div>
+            </article>
+          </section>
+
+          <section className="tariff-grid">
+            <div className="glass-panel tariff-impact-card">
+              <div className="section-title"><div><span className="eyebrow">SELECTION IMPACT</span><h2>对选品与定价的影响</h2></div><ChartLineUp weight="duotone" /></div>
+              {tariffImpact?.summary && <p className="tariff-summary">{tariffImpact.summary}</p>}
+              {tariffImpact?.selection_impact?.length ? (
+                <ol className="impact-list">{tariffImpact.selection_impact.map((item, index) => <li key={`${item}-${index}`}><span>{String(index + 1).padStart(2, '0')}</span><p>{item}</p></li>)}</ol>
+              ) : <div className="empty-inline">当前没有可用的税费选品影响。</div>}
+              {!!tariffImpact?.risk_flags?.length && <div className="risk-tags" aria-label="风险标记">{tariffImpact.risk_flags.map((flag) => <span key={flag}><WarningCircle weight="fill" />{flag.replaceAll('_', ' ')}</span>)}</div>}
+            </div>
+
+            <div className="glass-panel tariff-evidence-card">
+              <div className="section-title"><div><span className="eyebrow">SOURCE EVIDENCE</span><h2>税则证据链</h2></div><Database weight="duotone" /></div>
+              <dl className="tariff-source-meta">
+                <div><dt>提供器</dt><dd>{tariffSnapshot?.provider || '未提供'}</dd></div>
+                <div><dt>法域</dt><dd>{tariffSnapshot?.jurisdiction || '未提供'}</dd></div>
+                <div><dt>生效日期</dt><dd>{tariffSnapshot?.effective_date || tariffEvidence[0]?.effective_date || '未提供'}</dd></div>
+              </dl>
+              {tariffEvidence.length ? <ul className="tariff-evidence-list">{tariffEvidence.map((item, index) => (
+                <li key={item.evidence_id || index}>
+                  <div><code>{item.evidence_id || `EVIDENCE-${index + 1}`}</code>{typeof item.confidence === 'number' && <span>{Math.round(item.confidence * 100)}% confidence</span>}</div>
+                  <p>{item.summary}</p>
+                  <small>{item.source_name || '未知来源'}</small>
+                </li>
+              ))}</ul> : <div className="empty-inline">本次报告未包含可展示的税则证据。</div>}
+            </div>
+          </section>
+
+          {!!tariffGaps.length && <section className="glass-panel tariff-gaps" role="status"><WarningCircle weight="fill" /><div><strong>税则数据缺口</strong>{tariffGaps.map((gap, index) => <p key={`${gap.field}-${index}`}>{gap.field || '相关数据'}：{gap.reason || '需要补充证据。'}</p>)}</div></section>}
+        </>
+      ) : (
+        <section className="tariff-placeholder glass-panel">
+          <div className="placeholder-orbit"><Receipt weight="thin" /><span /><span /></div>
+          <span className="eyebrow">HTS DATA STANDBY</span>
+          <h2>运行一次美国市场真实分析</h2>
+          <p>系统会自动请求 <code>us-tariff-provider</code>，并把税号、税率、附加税文本和风险标记传给运营决策 Agent。</p>
+          <button className="primary-button compact" onClick={() => navigate(runId ? 'agents' : 'workspace')}>{runId ? '查看 Agent 进度' : '创建美国市场任务'}<ArrowRight weight="bold" /></button>
+        </section>
+      )}
+    </div>
+  )
+
   const renderReport = () => (
     <div className="page-view page-report">
       <PageHeader
@@ -620,7 +744,7 @@ function App() {
           <div className="placeholder-orbit"><FileText weight="thin" /><span /><span /></div>
           <span className="eyebrow">REPORT STANDBY</span>
           <h2>报告会在审校完成后生成</h2>
-          <p>报告包含商品概况、同类市场、用户洞察、运营方案、数据限制和证据索引。</p>
+          <p>报告包含商品概况、同类市场、用户洞察、美国关税影响、数据限制和证据索引。</p>
           <button className="primary-button compact" onClick={() => navigate(runId ? 'agents' : 'workspace')}>{runId ? '查看 Agent 进度' : '创建分析任务'}<ArrowRight weight="bold" /></button>
         </section>
       )}
@@ -664,6 +788,7 @@ function App() {
           <div className="content-stage">
             {page === 'workspace' && renderWorkspace()}
             {page === 'agents' && renderAgents()}
+            {page === 'tariff' && renderTariff()}
             {page === 'audit' && renderAudit()}
             {page === 'report' && renderReport()}
           </div>

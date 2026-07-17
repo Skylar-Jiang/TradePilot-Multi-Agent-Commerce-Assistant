@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.api.responses import failure
 from app.api.v1.router import router
+from app.background.providers import build_default_background_registry
 from app.background.registry import BackgroundProviderRegistry
 from app.core.config import Settings, get_settings
 from app.core.exceptions import TradePilotError
@@ -70,7 +71,7 @@ def create_app(
         )
         application.state.knowledge_store_factory = worker_knowledge_store
         application.state.statistics_provider_factory = statistics_provider_factory
-        application.state.background_registry = background_registry or BackgroundProviderRegistry()
+        application.state.background_registry = background_registry or build_default_background_registry(resolved)
         application.state.run_dispatcher = RunDispatcher(
             session_factory=session_factory,
             knowledge_store_factory=worker_knowledge_store,

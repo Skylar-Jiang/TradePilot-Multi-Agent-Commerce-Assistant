@@ -36,6 +36,8 @@ class ReportExporter:
         "user_insight": "User insight",
         "operation_plan": "Operation plan",
         "content_playbook": "Content playbook",
+        "tax_and_tariff_snapshot": "Tax and tariff snapshot",
+        "tariff_selection_impact": "Tariff impact on selection",
         "audit_result": "Evidence audit",
         "data_limitations": "Data limitations",
         "evidence_index": "Evidence index",
@@ -153,6 +155,8 @@ class ReportExporter:
             "user_insight": self._dump(state.user_insight),
             "operation_plan": self._dump(plan),
             "content_playbook": content.as_dict() if content else None,
+            "tax_and_tariff_snapshot": self._tax_and_tariff_snapshot(state),
+            "tariff_selection_impact": self._tariff_selection_impact(state),
             "audit_result": audit.model_dump(mode="json"),
             "data_limitations": rendered_limitations,
             "evidence_index": evidence_index,
@@ -174,6 +178,61 @@ class ReportExporter:
                 "review_sample_scope": state.review_sample_scope,
                 "evidence_index": evidence_index,
             },
+        }
+
+    @staticmethod
+    def _tax_and_tariff_snapshot(state: TradePilotState) -> dict[str, object] | None:
+        context = state.background_context
+        if context is None:
+            return None
+        tariff_evidence = [
+            item
+            for item in context.evidence
+            if item.context_type in {"tariff_rate", "import_duty", "customs_duty"}
+        ]
+        if not tariff_evidence and not context.data_gaps:
+            return None
+        return {
+            "provider": context.provider,
+            "market": context.query.market,
+            "jurisdiction": context.query.jurisdiction,
+            "effective_date": (
+                context.query.effective_date.isoformat() if context.query.effective_date else None
+            ),
+            "query_date": context.query.query_date.isoformat(),
+            "matched_context_types": sorted({item.context_type for item in tariff_evidence}),
+            "decision_inputs": context.decision_inputs,
+            "tariff_evidence": [
+                {
+                    "evidence_id": item.evidence_id,
+                    "context_type": item.context_type,
+                    "summary": item.content,
+                    "source_name": item.source_name,
+                    "source_uri": item.source_uri,
+                    "effective_date": item.effective_date.isoformat() if item.effective_date else None,
+                    "jurisdiction": item.jurisdiction,
+                    "confidence": item.confidence,
+                }
+                for item in tariff_evidence
+            ],
+            "data_gaps": [gap.model_dump(mode="json") for gap in context.data_gaps],
+        }
+
+    @staticmethod
+    def _tariff_selection_impact(state: TradePilotState) -> dict[str, object] | None:
+        context = state.background_context
+        if context is None or not context.decision_inputs:
+            return None
+        decision_inputs = context.decision_inputs
+        profiles = decision_inputs.get("tariff_profiles")
+        if not profiles and not context.data_gaps:
+            return None
+        return {
+            "summary": decision_inputs.get("tariff_summary") or "",
+            "risk_flags": decision_inputs.get("tariff_risk_flags") or [],
+            "manual_review_required": bool(decision_inputs.get("manual_review_required")),
+            "selection_impact": decision_inputs.get("selection_impact") or [],
+            "primary_tariff_profile": decision_inputs.get("primary_tariff_profile") or {},
         }
 
     @classmethod
@@ -279,6 +338,8 @@ class ReportExporter:
         limitations = sections.get("data_limitations") or []
         evidence = sections.get("evidence_index") or []
         actions = sections.get("next_actions") or []
+        tariff_snapshot = sections.get("tax_and_tariff_snapshot") or {}
+        tariff_impact = sections.get("tariff_selection_impact") or {}
 
         lines = [
             "# TradePilot DEMO Operations Report",
@@ -341,6 +402,44 @@ class ReportExporter:
         else:
             lines.extend(["No content bundle was generated.", ""])
 
+        lines.extend(["", "## Tax and tariff snapshot", ""])
+        if tariff_snapshot:
+            lines.append(f"- Provider: `{tariff_snapshot.get('provider') or 'not_available'}`")
+            lines.append(f"- Market: {tariff_snapshot.get('market') or 'Not supplied'}")
+            lines.append(f"- Jurisdiction: {tariff_snapshot.get('jurisdiction') or 'Not supplied'}")
+            if tariff_snapshot.get("effective_date"):
+                lines.append(f"- Effective date: {tariff_snapshot['effective_date']}")
+            evidence_items = tariff_snapshot.get("tariff_evidence") or []
+            if evidence_items:
+                lines.append("")
+                for item in evidence_items:
+                    lines.append(
+                        f"- `{item['evidence_id']}` - {item['summary']} ({item['source_name']})"
+                    )
+            gaps = tariff_snapshot.get("data_gaps") or []
+            if gaps:
+                lines.append("")
+                lines.extend(f"- Data gap: {gap['field']} / {gap['reason']}" for gap in gaps)
+        else:
+            lines.append("- No tariff evidence was included in this report.")
+
+        lines.extend(["", "## Tariff impact on selection", ""])
+        if tariff_impact:
+            if tariff_impact.get("summary"):
+                lines.append(str(tariff_impact["summary"]))
+                lines.append("")
+            for item in tariff_impact.get("selection_impact") or []:
+                lines.append(f"- {item}")
+            risk_flags = tariff_impact.get("risk_flags") or []
+            if risk_flags:
+                lines.append("")
+                lines.append(f"- Risk flags: {', '.join(risk_flags)}")
+            lines.append(
+                f"- Manual review required: `{str(bool(tariff_impact.get('manual_review_required'))).lower()}`"
+            )
+        else:
+            lines.append("- No tariff decision input was available for selection impact analysis.")
+
         lines.extend(["## Evidence audit", "", f"Status: `{audit.get('status', 'not_available')}`", ""])
         issues = audit.get("issues") or []
         lines.extend(f"- {issue}" for issue in issues)
@@ -392,6 +491,8 @@ class ReportExporter:
         hypotheses = sections.get("reasoned_hypotheses") or []
         limitations = sections.get("data_limitations_and_evidence_index") or {}
         evidence = limitations.get("evidence_index") or []
+        tariff_snapshot = sections.get("tax_and_tariff_snapshot") or {}
+        tariff_impact = sections.get("tariff_selection_impact") or {}
         lines = [
             "# TradePilot 新商品上市分析报告",
             "",
@@ -467,6 +568,36 @@ class ReportExporter:
         lines.extend(f"- {item}" for item in hypotheses)
         if not hypotheses:
             lines.append("- 暂无属性推导假设。")
+        lines.extend(["", "## 美国税费快照", ""])
+        if tariff_snapshot:
+            lines.append(f"- Provider：`{tariff_snapshot.get('provider') or 'not_available'}`")
+            lines.append(f"- 市场：{tariff_snapshot.get('market') or '未提供'}")
+            lines.append(f"- 法域：{tariff_snapshot.get('jurisdiction') or '未提供'}")
+            if tariff_snapshot.get("effective_date"):
+                lines.append(f"- 生效日期：{tariff_snapshot['effective_date']}")
+            for item in tariff_snapshot.get("tariff_evidence") or []:
+                lines.append(f"- `{item['evidence_id']}`：{item['summary']}")
+            for gap in tariff_snapshot.get("data_gaps") or []:
+                lines.append(f"- 数据缺口：{gap['field']}：{gap['reason']}")
+            if not tariff_snapshot.get("tariff_evidence") and not tariff_snapshot.get("data_gaps"):
+                lines.append("- 暂无可展示的税费证据。")
+        else:
+            lines.append("- 本报告未包含美国税费证据。")
+        lines.extend(["", "## 美国税费对选品影响", ""])
+        if tariff_impact:
+            if tariff_impact.get("summary"):
+                lines.append(str(tariff_impact["summary"]))
+                lines.append("")
+            for item in tariff_impact.get("selection_impact") or []:
+                lines.append(f"- {item}")
+            risk_flags = tariff_impact.get("risk_flags") or []
+            if risk_flags:
+                lines.append(f"- 风险标记：{', '.join(risk_flags)}")
+            lines.append(
+                f"- 是否需要人工复核：{'是' if tariff_impact.get('manual_review_required') else '否'}"
+            )
+        else:
+            lines.append("- 当前没有可直接用于选品决策的税费摘要输入。")
         lines.extend(["", "## 数据限制与证据索引", ""])
         for item in limitations.get("match_limitations", []):
             lines.append(f"- 匹配限制：{item}")

@@ -26,12 +26,8 @@ If an attribute cannot be verified visually, put it in uncertainties.
 class ProductVisionService:
     def __init__(self, *, session: Session, model: BaseChatModel | None = None) -> None:
         self.session = session
-        self.model = model or create_vision_model()
-        self.chain: RunnableSequence = (
-            RunnableLambda(self._build_messages)
-            | self.model
-            | RunnableLambda(self._parse_response)
-        )
+        self.model = model
+        self.chain: RunnableSequence | None = None
 
     def analyze_if_available(self, product: ProductProfile) -> ProductVisionAnalysis | None:
         files = self.session.scalars(
@@ -45,6 +41,13 @@ class ProductVisionService:
             content_type = str(metadata.get("content_type") or "")
             if not _verified_image(path, content_type):
                 continue
+            if self.chain is None:
+                self.model = self.model or create_vision_model()
+                self.chain = (
+                    RunnableLambda(self._build_messages)
+                    | self.model
+                    | RunnableLambda(self._parse_response)
+                )
             result = self.chain.invoke({"path": path, "content_type": content_type})
             return result.model_copy(
                 update={

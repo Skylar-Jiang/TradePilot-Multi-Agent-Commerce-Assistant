@@ -593,6 +593,76 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--blue
 .guardrail-grid h3 { margin: 14px 0 8px; color: #fff; font-size: 13px; }
 .guardrail-grid p { margin: 0; color: var(--ink-faint); font-size: 10px; line-height: 1.65; }
 
+/* Tariff intelligence */
+.tariff-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.tariff-metric {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 16px;
+  min-height: 160px;
+  padding: 22px;
+  overflow: hidden;
+}
+
+.tariff-metric::after {
+  content: '';
+  position: absolute;
+  right: -48px;
+  bottom: -68px;
+  width: 150px;
+  aspect-ratio: 1;
+  border: 1px solid rgba(103, 165, 255, .12);
+  border-radius: 50%;
+  box-shadow: 0 0 55px rgba(57, 134, 255, .08);
+}
+
+.tariff-metric.primary { border-color: rgba(69, 215, 164, .25); }
+.tariff-metric > span { display: grid; width: 48px; height: 48px; place-items: center; border: 1px solid rgba(103,165,255,.22); border-radius: 13px; color: var(--blue-bright); background: rgba(57,134,255,.1); }
+.tariff-metric.primary > span { color: #9bf1d2; border-color: rgba(69,215,164,.23); background: rgba(69,215,164,.09); }
+.tariff-metric > span svg { width: 25px; height: 25px; }
+.tariff-metric > div { min-width: 0; }
+.tariff-metric small { color: var(--ink-faint); font: 600 9px/1.2 'Fira Code', monospace; letter-spacing: .1em; }
+.tariff-metric strong { display: block; margin: 10px 0 8px; color: #fff; font: 600 clamp(20px,2vw,28px)/1 'Fira Code', monospace; font-variant-numeric: tabular-nums; word-break: break-word; }
+.tariff-metric p { margin: 0; color: var(--ink-muted); font-size: 10px; line-height: 1.6; }
+
+.tariff-grid { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(340px, .88fr); gap: 24px; }
+.tariff-impact-card, .tariff-evidence-card { padding: clamp(22px,3vw,34px); }
+.tariff-summary { margin: -4px 0 20px; padding: 14px 16px; border-left: 3px solid var(--blue-bright); border-radius: 0 10px 10px 0; color: #dbe7f9; background: rgba(57,134,255,.065); font-size: 12px; line-height: 1.75; }
+.impact-list, .tariff-evidence-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.impact-list li { display: grid; grid-template-columns: 34px minmax(0,1fr); gap: 12px; align-items: start; padding: 13px 14px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.018); }
+.impact-list li > span { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 8px; color: var(--blue-bright); background: rgba(57,134,255,.1); font: 600 9px/1 'Fira Code', monospace; }
+.impact-list p { margin: 3px 0 0; color: #d7e1f0; font-size: 11px; line-height: 1.7; }
+.risk-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.risk-tags span { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 6px 9px; border: 1px solid rgba(255,198,90,.2); border-radius: 999px; color: #ffd983; background: rgba(255,198,90,.055); font: 500 8px/1.2 'Fira Code', monospace; text-transform: uppercase; }
+.risk-tags svg { width: 13px; height: 13px; }
+
+.tariff-source-meta { display: grid; grid-template-columns: repeat(3,1fr); margin: -4px 0 18px; border: 1px solid var(--line); border-radius: 13px; }
+.tariff-source-meta div { min-width: 0; padding: 13px; }
+.tariff-source-meta div + div { border-left: 1px solid var(--line); }
+.tariff-source-meta dt { margin-bottom: 6px; color: var(--ink-faint); font-size: 8px; }
+.tariff-source-meta dd { margin: 0; overflow-wrap: anywhere; color: #e2ebf8; font: 500 9px/1.5 'Fira Code', monospace; }
+.tariff-evidence-list li { padding: 14px; border: 1px solid rgba(69,215,164,.14); border-radius: 12px; background: rgba(69,215,164,.025); }
+.tariff-evidence-list li > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.tariff-evidence-list code { color: #9bf1d2; font: 500 8px/1.4 'Fira Code', monospace; overflow-wrap: anywhere; }
+.tariff-evidence-list li > div span { flex: 0 0 auto; color: var(--ink-faint); font: 500 8px/1 'Fira Code', monospace; }
+.tariff-evidence-list p { margin: 10px 0 8px; color: #d5e0ef; font-size: 10px; line-height: 1.65; }
+.tariff-evidence-list small { color: var(--ink-faint); font-size: 9px; }
+.tariff-gaps { display: flex; align-items: flex-start; gap: 13px; margin-top: 24px; padding: 18px 20px; border-color: rgba(255,198,90,.22); background: linear-gradient(145deg, rgba(78,58,22,.24), rgba(9,24,44,.76)); }
+.tariff-gaps > svg { flex: 0 0 22px; width: 22px; height: 22px; color: var(--amber); }
+.tariff-gaps strong { color: #ffe2a4; font-size: 12px; }
+.tariff-gaps p { margin: 7px 0 0; color: #d8c49d; font-size: 10px; line-height: 1.6; }
+.tariff-placeholder { display: grid; min-height: 570px; place-items: center; align-content: center; padding: 40px; text-align: center; }
+.tariff-placeholder h2 { margin: 10px 0; color: #fff; font: 600 24px/1.3 'Fira Code','Microsoft YaHei',monospace; }
+.tariff-placeholder > p { max-width: 650px; margin: 0 0 24px; color: var(--ink-muted); font-size: 13px; line-height: 1.75; }
+.tariff-placeholder code { padding: 2px 5px; border-radius: 5px; color: #9bf1d2; background: rgba(69,215,164,.08); font-family: 'Fira Code', monospace; }
+
 /* Report */
 .report-shell { overflow: hidden; }
 .report-toolbar { display: grid; grid-template-columns: 1fr 180px 150px; border-bottom: 1px solid var(--line); background: rgba(255,255,255,.02); }
@@ -639,11 +709,13 @@ footer strong { color: var(--ink); font: 600 13px/1 'Fira Code', monospace; }
   .guardrail-grid { grid-template-columns: repeat(2,1fr); }
   .run-command { grid-template-columns: minmax(220px,1fr) minmax(220px,1fr); }
   .run-stage { border-left: 0; }
+  .tariff-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 980px) {
   .content-stage { padding: 30px 24px; }
   .workspace-layout, .audit-layout { grid-template-columns: 1fr; }
+  .tariff-metrics { grid-template-columns: 1fr; }
   .launch-brief { position: static; }
   .brief-visual { height: 150px; }
   .serial-agent { grid-template-columns: auto minmax(0,1fr); }
@@ -676,6 +748,8 @@ footer strong { color: var(--ink); font: 600 13px/1 'Fira Code', monospace; }
   .report-toolbar { grid-template-columns: 1fr; }
   .report-toolbar > div + div { border-top: 1px solid var(--line); border-left: 0; }
   .report-paper { margin: 16px; padding: 24px 18px; }
+  .tariff-source-meta { grid-template-columns: 1fr; }
+  .tariff-source-meta div + div { border-top: 1px solid var(--line); border-left: 0; }
   footer { align-items: flex-start; flex-direction: column; }
   footer > div { align-items: flex-start; flex-direction: column; }
 }
@@ -685,7 +759,7 @@ footer strong { color: var(--ink); font: 600 13px/1 'Fira Code', monospace; }
   .panel-heading { grid-template-columns: 42px minmax(0,1fr); }
   .panel-heading > svg { display: none; }
   .heading-index { width: 40px; height: 40px; }
-  .product-form, .launch-brief, .workflow-canvas, .timeline-panel, .audit-verdict-card, .audit-list-card, .guardrail-panel { padding: 20px 16px; }
+  .product-form, .launch-brief, .workflow-canvas, .timeline-panel, .audit-verdict-card, .audit-list-card, .guardrail-panel, .tariff-impact-card, .tariff-evidence-card { padding: 20px 16px; }
   .serial-agent { padding: 15px 13px; }
   .serial-meta { padding-left: 0; }
   .real-notice small { line-height: 1.5; }

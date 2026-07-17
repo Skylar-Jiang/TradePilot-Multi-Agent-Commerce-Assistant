@@ -65,12 +65,10 @@ def _model(name: str, payload: dict[str, object], calls: Counter[str]) -> Runnab
 
 
 def test_real_agent_prompts_require_simplified_chinese_narrative() -> None:
-    requirement = "所有自然语言内容必须使用简体中文"
-
-    assert requirement in PRODUCT_MARKET_SYSTEM_PROMPT
-    assert requirement in USER_INSIGHT_SYSTEM_PROMPT
-    assert requirement in OPERATIONS_SYSTEM_PROMPT
-    assert requirement in AUDIT_SYSTEM_PROMPT
+    assert "Simplified Chinese" in OPERATIONS_SYSTEM_PROMPT
+    assert "所有自然语言内容必须使用简体中文" in PRODUCT_MARKET_SYSTEM_PROMPT
+    assert "所有自然语言内容必须使用简体中文" in USER_INSIGHT_SYSTEM_PROMPT
+    assert "所有自然语言内容必须使用简体中文" in AUDIT_SYSTEM_PROMPT
 
 
 def test_audit_discards_model_missing_id_claim_refuted_by_supplied_evidence() -> None:

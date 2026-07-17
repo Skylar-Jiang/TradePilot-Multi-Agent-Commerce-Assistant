@@ -84,6 +84,8 @@ class Settings(BaseSettings):
     peer_reviews_path: Path = Path("data/filtered/pet_supplies_reviews_prefiltered.jsonl")
     peer_cache_dir: Path = Path("data/demo/cache")
     peer_match_config_path: Path = Path("config/peer_matching.yaml")
+    trade_hs_mapping_path: Path = Path("config/trade/hs_mapping.yaml")
+    trade_tariff_db_path: Path = Path("data/external/serving/tariff_rules.sqlite")
     peer_max_reviews: int = 300
     run_worker_count: int = Field(default=2, ge=1, le=8)
     sse_poll_interval_seconds: float = Field(default=0.1, gt=0, le=5)
@@ -95,7 +97,6 @@ class Settings(BaseSettings):
     def real_model_configured(self) -> bool:
         provider_models = bool(
             self.deepseek_api_key
-            and self.qwen_api_key
             and self.model_analysis
             and self.model_fast
             and self.model_report

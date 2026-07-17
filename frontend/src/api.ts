@@ -146,18 +146,22 @@ export const api = {
       body: form,
     })
   },
-  startRun: (productId: string, mode: DataMode, targetMarket: string) =>
-    request<AnalysisRun>('/analysis-runs', {
+  startRun: (productId: string, mode: DataMode, targetMarket: string) => {
+    const isUnitedStates = /(美国|United States|\bUS\b|\bUSA\b)/i.test(targetMarket)
+    return request<AnalysisRun>('/analysis-runs', {
       method: 'POST',
       body: JSON.stringify({
         product_id: productId,
         data_mode: mode,
         target_market: targetMarket,
-        jurisdiction: targetMarket.includes('美国') ? 'US' : '',
+        jurisdiction: isUnitedStates ? 'US' : '',
         platform: 'cross_border_ecommerce',
+        background_context_types: isUnitedStates ? ['tariff_rate'] : [],
+        ...(isUnitedStates ? { background_provider: 'us-tariff-provider' } : {}),
         user_constraints: { language: 'zh-CN', evidence_grounded: true },
       }),
-    }),
+    })
+  },
   status: (runId: string) => request<RunStatusView>(`/analysis-runs/${runId}/status`),
   timeline: (runId: string) => request<TimelineView>(`/analysis-runs/${runId}/timeline`),
   agents: (runId: string) =>

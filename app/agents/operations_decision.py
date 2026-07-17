@@ -26,13 +26,16 @@ NUMERIC_CLAIM_PATTERN = r"(?<![A-Za-z0-9_.-])\d+(?:\.\d+)?%?"
 
 OPERATIONS_SYSTEM_PROMPT = """
 You are TradePilot OperationsDecisionAgent. The target is an unlisted new product with no sales or reviews.
-所有自然语言内容必须使用简体中文，包括定位、结论、下一步行动和数据缺口说明。
-JSON 键名、枚举值、evidence_id、ASIN、品牌名、商品名和单位保持原值；不要输出英文句子。
-Use only the supplied new-product profile and the two evidence-grounded analyses. Never turn a待验证假设 into a fact,
-never attribute peer reviews to the new product, and never invent evidence IDs or numeric facts.
+All natural-language narrative content must be written in Simplified Chinese.
+Keep JSON keys, enum values, evidence_id, ASIN, brand names, product names, and units in their original form.
+Use only the supplied new-product profile and the two evidence-grounded analyses.
+Never turn a reasoned_hypothesis into a fact, never attribute peer reviews to the new product,
+and never invent evidence IDs or numeric facts.
+When Product background includes tariff decision inputs, reflect their impact on landed cost, margin, pricing buffer,
+launch gating, or broker-review requirements instead of treating them as passive reference material.
 Return only JSON with status, positioning, conclusions, evidence_ids, data_gaps, and next_steps.
 positioning must be one plain string, never an object or array.
-Every factual conclusion must use an evidence_id already present in the supplied analyses.
+Every factual conclusion must use an evidence_id already present in the supplied analyses or Product background.
 Use 同类市场商品, 同类商品评论样本, 同类用户常见关注点, and 新商品上市前需验证事项.
 Each conclusion must be {{"conclusion":"...","conclusion_type":"recommendation|evidence_summary|reasoned_hypothesis",
 "confidence":0.0,"evidence_ids":[],"data_gaps":[]}}.
@@ -108,8 +111,15 @@ class OperationsDecisionAgent(BaseScaffoldAgent[OperationsDecisionAgentInput, Op
 
     def _postprocess(self, payload: dict[str, Any], context: OperationsDecisionAgentInput) -> OperationPlan:
         payload = normalize_model_data_gaps(payload, field="operations_decision")
+        background_ids = (
+            [item.evidence_id for item in context.background_context.evidence]
+            if context.background_context is not None
+            else []
+        )
         allowed_ids = set(
-            context.product_market_analysis.evidence_ids + context.user_insight.evidence_ids
+            context.product_market_analysis.evidence_ids
+            + context.user_insight.evidence_ids
+            + background_ids
         )
         payload["data_origin"] = context.product.data_origin
         payload["peer_group_id"] = context.peer_group_id
@@ -154,10 +164,7 @@ class OperationsDecisionAgent(BaseScaffoldAgent[OperationsDecisionAgentInput, Op
         )
         payload.setdefault("data_gaps", [])
         payload["next_steps"] = normalize_text_list(payload.get("next_steps", []))
-        positioning = payload.get("positioning", "")
-        if not isinstance(positioning, str):
-            raise ValueError("OperationPlan.positioning must be a string")
-        payload["positioning"] = positioning.strip()
+        payload["positioning"] = self._normalize_positioning(payload.get("positioning", ""))
         content = self.content_skill.build(product=context.product, positioning=payload["positioning"])
         payload["next_steps"] = [*payload["next_steps"], *content.as_next_steps()]
         allowed_numbers = self._allowed_numbers(context)
@@ -176,6 +183,8 @@ class OperationsDecisionAgent(BaseScaffoldAgent[OperationsDecisionAgentInput, Op
         source = {"product": context.product.model_dump(mode="json")}
         if context.statistics is not None:
             source["statistics"] = context.statistics.model_dump(mode="json")
+        if context.background_context is not None:
+            source["background_context"] = context.background_context.model_dump(mode="json")
         values = set(
             re.findall(
                 NUMERIC_SOURCE_PATTERN,
@@ -201,31 +210,48 @@ class OperationsDecisionAgent(BaseScaffoldAgent[OperationsDecisionAgentInput, Op
         return re.sub(NUMERIC_CLAIM_PATTERN, replace, text)
 
     @staticmethod
+    def _normalize_positioning(value: object) -> str:
+        if isinstance(value, str):
+            return value.strip()
+        if isinstance(value, dict):
+            for key in ("positioning", "summary", "text", "value", "conclusion"):
+                candidate = value.get(key)
+                if isinstance(candidate, str) and candidate.strip():
+                    return candidate.strip()
+            parts = [str(item).strip() for item in value.values() if str(item).strip()]
+            return "；".join(parts)
+        if isinstance(value, list):
+            parts = [str(item).strip() for item in value if str(item).strip()]
+            return "；".join(parts)
+        return str(value).strip()
+
+    @staticmethod
     def _compact_analysis(value: Any) -> str:
         payload = value.model_dump(mode="json")
         return str(
             {
                 key: payload.get(key)
                 for key in payload
-                if key
-                not in {
-                    "scaffold_note",
-                    "selected_parent_asins",
-                    "data_gaps",
-                }
+                if key not in {"scaffold_note", "selected_parent_asins", "data_gaps"}
             }
         )
 
     def _run_deterministic(self, context: OperationsDecisionAgentInput) -> OperationPlan:
-        evidence_ids = sorted(
+        core_evidence_ids = sorted(
             set(context.product_market_analysis.evidence_ids + context.user_insight.evidence_ids)
         )
+        background_evidence_ids = (
+            [item.evidence_id for item in context.background_context.evidence]
+            if context.background_context is not None
+            else []
+        )
+        evidence_ids = sorted(set([*core_evidence_ids, *background_evidence_ids]))
         data_gaps = self._merge_gaps(
             context.product.data_gaps,
             context.product_market_analysis.data_gaps,
             context.user_insight.data_gaps,
         )
-        if not evidence_ids:
+        if not core_evidence_ids:
             data_gaps = self._merge_gaps(
                 data_gaps,
                 [
@@ -244,7 +270,7 @@ class OperationsDecisionAgent(BaseScaffoldAgent[OperationsDecisionAgentInput, Op
         value_focus = product.features[0] if product.features else "verified product attributes"
         evidence_note = (
             "Use the cited product and user evidence as the validation boundary."
-            if evidence_ids
+            if core_evidence_ids
             else "Treat this as a profile-led hypothesis until product and user evidence is supplied."
         )
         positioning = (
@@ -255,9 +281,9 @@ class OperationsDecisionAgent(BaseScaffoldAgent[OperationsDecisionAgentInput, Op
             Conclusion(
                 conclusion=positioning,
                 conclusion_type="recommendation",
-                confidence=0.72 if evidence_ids else 0.35,
-                evidence_ids=evidence_ids,
-                data_gaps=[] if evidence_ids else data_gaps,
+                confidence=0.72 if core_evidence_ids else 0.35,
+                evidence_ids=core_evidence_ids,
+                data_gaps=[] if core_evidence_ids else data_gaps,
             )
         ]
         if product.target_market:
@@ -290,11 +316,35 @@ class OperationsDecisionAgent(BaseScaffoldAgent[OperationsDecisionAgentInput, Op
                 )
             )
 
+        tariff_brief = ""
+        tariff_actions: list[str] = []
+        if context.background_context is not None and context.background_context.decision_inputs:
+            tariff_brief = str(
+                context.background_context.decision_inputs.get("agent_decision_brief")
+                or context.background_context.decision_inputs.get("tariff_summary")
+                or ""
+            ).strip()
+            tariff_actions = [
+                str(item).strip()
+                for item in context.background_context.decision_inputs.get("tariff_recommended_actions", [])
+                if str(item).strip()
+            ]
+        if tariff_brief:
+            conclusions.append(
+                Conclusion(
+                    conclusion=f"Tariff decision input: {tariff_brief}",
+                    conclusion_type="recommendation",
+                    confidence=0.8 if background_evidence_ids else 0.5,
+                    evidence_ids=background_evidence_ids,
+                )
+            )
+
         content = self.content_skill.build(product=product, positioning=positioning)
         next_steps = [
             "ACTION: Validate the proposed positioning against current marketplace evidence before launch.",
             "ACTION: Confirm every product specification and compatibility statement before publishing.",
             "ACTION: Add structured competitor prices and review statistics before making numeric claims.",
+            *[f"ACTION: {item}" for item in tariff_actions],
             *content.as_next_steps(),
         ]
 
@@ -304,7 +354,7 @@ class OperationsDecisionAgent(BaseScaffoldAgent[OperationsDecisionAgentInput, Op
         }
         if AgentStatus.FAILED in statuses:
             status = AgentStatus.FAILED
-        elif evidence_ids:
+        elif core_evidence_ids:
             status = AgentStatus.SUCCEEDED
         else:
             status = AgentStatus.INSUFFICIENT_EVIDENCE

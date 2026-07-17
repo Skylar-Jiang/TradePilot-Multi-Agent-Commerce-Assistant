@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
@@ -6,9 +7,11 @@ from langchain_core.runnables import RunnableSequence
 from app.agents.contracts import EvidenceAuditAgentInput, OperationsDecisionAgentInput
 from app.agents.evidence_audit import EvidenceAuditAgent
 from app.agents.operations_decision import OperationsDecisionAgent
-from app.core.enums import AgentStatus, AuditStatus, DataOrigin
+from app.background.contracts import BackgroundEvidence, BackgroundQuery, BackgroundResult
+from app.core.enums import AgentStatus, AuditStatus, DataOrigin, KnowledgeType
 from app.schemas.analysis import AuditResult, OperationPlan, ProductMarketAnalysis, UserInsight
 from app.schemas.common import Conclusion
+from app.schemas.evidence import EvidenceReference
 from app.schemas.product import ProductProfile
 from app.skills.operation_content import OperationContentSkill
 from app.statistics.contracts import StatisticsResult
@@ -81,6 +84,147 @@ def test_decision_agent_generates_versioned_content_and_evidence_bound_plan(
     assert audit.status is AuditStatus.PASS
 
 
+def test_decision_agent_adds_tariff_inputs_to_plan_without_changing_status_basis(
+    demo_product: ProductProfile,
+) -> None:
+    market = ProductMarketAnalysis(
+        status=AgentStatus.SUCCEEDED,
+        data_origin=DataOrigin.DEMO,
+        evidence_ids=["market-1"],
+    )
+    insight = UserInsight(
+        status=AgentStatus.SUCCEEDED,
+        data_origin=DataOrigin.DEMO,
+        evidence_ids=["review-1"],
+    )
+    background = BackgroundResult(
+        provider="us-tariff-provider",
+        query=BackgroundQuery(
+            product_name=demo_product.name,
+            product_type=demo_product.category,
+            market="United States",
+            jurisdiction="US",
+            context_types=["tariff_rate"],
+            effective_date=date(2026, 7, 1),
+            query_date=date(2026, 7, 15),
+        ),
+        evidence=[
+            BackgroundEvidence(
+                evidence_id="us-hts-8421210000-2026-01-01",
+                context_type="tariff_rate",
+                content="General duty rate: Free. Additional duty text: 25%.",
+                source_name="USITC Harmonized Tariff Schedule",
+                source_uri="https://hts.usitc.gov/export",
+                effective_date=date(2026, 1, 1),
+                jurisdiction="US",
+                confidence=0.74,
+            )
+        ],
+        decision_inputs={
+            "agent_decision_brief": "美国税费输入显示该候选税号存在附加税，需回算 landed cost 与毛利。",
+            "tariff_recommended_actions": [
+                "把附加税情景加入 landed cost 与毛利测算，重新校验定价缓冲。",
+                "在打样或首单前完成 customs broker / 报关行 HTS 归类复核。",
+            ],
+        },
+    )
+
+    plan = OperationsDecisionAgent().run(
+        OperationsDecisionAgentInput(
+            product=demo_product,
+            product_market_analysis=market,
+            user_insight=insight,
+            background_context=background,
+        )
+    )
+
+    assert plan.status is AgentStatus.SUCCEEDED
+    assert "us-hts-8421210000-2026-01-01" in plan.evidence_ids
+    assert any("Tariff decision input:" in item.conclusion for item in plan.conclusions)
+    assert any("landed cost" in step for step in plan.next_steps)
+
+
+def test_audit_allows_hts_code_from_background_context_without_numeric_false_positive(
+    demo_product: ProductProfile,
+) -> None:
+    background = BackgroundResult(
+        provider="us-tariff-provider",
+        query=BackgroundQuery(
+            product_name=demo_product.name,
+            product_type=demo_product.category,
+            market="United States",
+            jurisdiction="US",
+            context_types=["tariff_rate"],
+            effective_date=date(2026, 7, 1),
+            query_date=date(2026, 7, 15),
+        ),
+        evidence=[
+            BackgroundEvidence(
+                evidence_id="us-hts-8421210000-2026-01-01",
+                context_type="tariff_rate",
+                content="Configured Phase 1 HS mapping matched 'Fountains' to candidate HTS 8421210000.",
+                source_name="USITC Harmonized Tariff Schedule",
+                source_uri="https://hts.usitc.gov/export",
+                effective_date=date(2026, 1, 1),
+                jurisdiction="US",
+                confidence=0.74,
+            )
+        ],
+        decision_inputs={
+            "agent_decision_brief": "美国税费输入显示 Fountains 当前候选 HTS 为 8421210000，一般税率为 Free。",
+        },
+    )
+    plan = OperationPlan(
+        status=AgentStatus.SUCCEEDED,
+        data_origin=DataOrigin.DEMO,
+        evidence_ids=["market-1", "us-hts-8421210000-2026-01-01"],
+        conclusions=[
+            Conclusion(
+                conclusion=(
+                    "Tariff decision input: 美国税费输入显示 Fountains 当前候选 HTS 为 "
+                    "8421210000，一般税率为 Free。"
+                ),
+                conclusion_type="recommendation",
+                confidence=0.8,
+                evidence_ids=["us-hts-8421210000-2026-01-01"],
+            )
+        ],
+    )
+    evidence = [
+        EvidenceReference(
+            evidence_id="market-1",
+            evidence_type="sql_statistics",
+            knowledge_type=KnowledgeType.PRODUCT_KNOWLEDGE,
+            source_name="peer SQL statistics",
+            excerpt="{}",
+            data_origin=DataOrigin.DEMO,
+            is_demo=True,
+            metadata={},
+        ),
+        EvidenceReference(
+            evidence_id="us-hts-8421210000-2026-01-01",
+            evidence_type="product_background",
+            knowledge_type=KnowledgeType.PRODUCT_KNOWLEDGE,
+            source_name="USITC Harmonized Tariff Schedule",
+            excerpt="Configured Phase 1 HS mapping matched 'Fountains' to candidate HTS 8421210000.",
+            data_origin=DataOrigin.REAL,
+            is_demo=False,
+            metadata={"source_type": "product_background_provider"},
+        ),
+    ]
+
+    audit = EvidenceAuditAgent().run(
+        EvidenceAuditAgentInput(
+            product=demo_product,
+            operation_plan=plan,
+            evidence=evidence,
+            background_context=background,
+        )
+    )
+
+    assert not any("8421210000" in issue for issue in audit.issues)
+
+
 def test_audit_rejects_orphan_evidence_unverified_numbers_and_forbidden_claims(
     demo_product: ProductProfile,
 ) -> None:
@@ -147,7 +291,7 @@ def test_audit_rejects_mismatched_parallel_peer_scopes_and_peer_review_misattrib
     plan = OperationPlan(
         status=AgentStatus.SUCCEEDED,
         data_origin=DataOrigin.DEMO,
-        positioning="当前商品反馈显示需要改善清洗。",
+        positioning="当前商品反馈显示需要改进清洗。",
         peer_group_id="group-a",
         selected_parent_asins=["PEER-A"],
         analysis_scopes={
@@ -226,7 +370,7 @@ def test_numeric_guard_preserves_valid_decimal_before_chinese_unit() -> None:
     assert OperationsDecisionAgent._sanitize_numeric_text("噪音低于18dB。", set()) == "噪音低于待验证数值dB。"
 
 
-def test_operations_agent_retries_when_positioning_has_wrong_schema(
+def test_operations_agent_normalizes_positioning_object_without_retry(
     demo_product: ProductProfile,
 ) -> None:
     product = demo_product.model_copy(update={"data_origin": DataOrigin.REAL})
@@ -242,10 +386,8 @@ def test_operations_agent_retries_when_positioning_has_wrong_schema(
     )
     model = FakeListChatModel(
         responses=[
-            '{"positioning":{"summary":"错误结构"},"evidence_ids":["market-1"],'
-            '"conclusions":[],"data_gaps":[],"next_steps":[]}',
-            '{"positioning":"面向目标用户的证据约束上市定位","evidence_ids":["market-1"],'
-            '"conclusions":[],"data_gaps":[],"next_steps":[]}',
+            '{"positioning":{"summary":"对象结构定位"},"evidence_ids":["market-1"],'
+            '"conclusions":[],"data_gaps":[],"next_steps":[]}'
         ]
     )
 
@@ -257,6 +399,78 @@ def test_operations_agent_retries_when_positioning_has_wrong_schema(
         )
     )
 
-    assert plan.positioning == "面向目标用户的证据约束上市定位"
-    assert plan.model_call_count == 2
-    assert plan.parse_retry_count == 1
+    assert plan.positioning == "对象结构定位"
+    assert plan.model_call_count == 1
+    assert plan.parse_retry_count == 0
+
+
+def test_operations_agent_preserves_tariff_numbers_from_background_context(
+    demo_product: ProductProfile,
+) -> None:
+    product = demo_product.model_copy(update={"data_origin": DataOrigin.REAL})
+    market = ProductMarketAnalysis(
+        status=AgentStatus.SUCCEEDED,
+        data_origin=DataOrigin.REAL,
+        evidence_ids=["market-1"],
+    )
+    insight = UserInsight(
+        status=AgentStatus.SUCCEEDED,
+        data_origin=DataOrigin.REAL,
+        evidence_ids=["review-1"],
+    )
+    background = BackgroundResult(
+        provider="us-tariff-provider",
+        query=BackgroundQuery(
+            product_name=product.name,
+            product_type=product.category,
+            market="United States",
+            jurisdiction="US",
+            context_types=["tariff_rate"],
+            effective_date=date(2026, 7, 1),
+            query_date=date(2026, 7, 15),
+        ),
+        evidence=[
+            BackgroundEvidence(
+                evidence_id="us-hts-8421210000-2026-01-01",
+                context_type="tariff_rate",
+                content="Configured Phase 1 HS mapping matched 'Fountains' to candidate HTS 8421210000.",
+                source_name="USITC Harmonized Tariff Schedule",
+                source_uri="https://hts.usitc.gov/export",
+                effective_date=date(2026, 1, 1),
+                jurisdiction="US",
+                confidence=0.74,
+            )
+        ],
+        decision_inputs={
+            "tariff_summary": "Fountains 当前候选 HTS 为 8421210000；一般税率为 Free；置信度 0.74。",
+            "primary_tariff_profile": {
+                "hs_code": "8421210000",
+                "general_rate": "Free",
+                "confidence": 0.74,
+            },
+        },
+    )
+    model = FakeListChatModel(
+        responses=[
+            '{"positioning":"围绕 HTS 8421210000 的低基础关税路径规划上市。",'
+            '"evidence_ids":["market-1","us-hts-8421210000-2026-01-01"],'
+            '"conclusions":[{"conclusion":"候选 HTS 8421210000 当前一般税率为 Free，置信度 0.74。",'
+            '"conclusion_type":"recommendation","confidence":0.8,'
+            '"evidence_ids":["us-hts-8421210000-2026-01-01"],"data_gaps":[]}],'
+            '"data_gaps":[],"next_steps":[]}'
+        ]
+    )
+
+    plan = OperationsDecisionAgent(model=model).run(
+        OperationsDecisionAgentInput(
+            product=product,
+            product_market_analysis=market,
+            user_insight=insight,
+            background_context=background,
+        )
+    )
+
+    assert "8421210000" in plan.positioning
+    assert "待验证数值" not in plan.positioning
+    assert any("8421210000" in item.conclusion for item in plan.conclusions)
+    assert any("0.74" in item.conclusion for item in plan.conclusions)
