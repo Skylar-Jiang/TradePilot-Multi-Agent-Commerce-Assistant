@@ -1,8 +1,8 @@
 from datetime import date
 from pathlib import Path
 
-from fastapi.testclient import TestClient
 import yaml
+from fastapi.testclient import TestClient
 
 from app.background.contracts import BackgroundQuery
 from app.background.tariff_data import TariffRuleRecord, build_tariff_database

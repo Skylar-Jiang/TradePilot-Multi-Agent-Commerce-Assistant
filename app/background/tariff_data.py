@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 import sqlite3
 from collections.abc import Iterable, Sequence
 from contextlib import closing
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from pathlib import Path
-import re
 
 DEFAULT_SOURCE_NAME = "USITC Harmonized Tariff Schedule"
 DEFAULT_SOURCE_URL = "https://hts.usitc.gov/export"

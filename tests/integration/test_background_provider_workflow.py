@@ -1,11 +1,11 @@
-from datetime import date
 import json
+from datetime import date
 from pathlib import Path
 
+import yaml
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
-import yaml
 
 from app.background.contracts import (
     BackgroundEvidence,
@@ -13,8 +13,8 @@ from app.background.contracts import (
     BackgroundResult,
 )
 from app.background.providers.us_tariff_provider import USTariffProvider
-from app.background.tariff_data import TariffRuleRecord, build_tariff_database
 from app.background.registry import BackgroundProviderRegistry
+from app.background.tariff_data import TariffRuleRecord, build_tariff_database
 from app.core.config import Settings
 from app.core.enums import DataMode, DataOrigin
 from app.db.base import Base
@@ -189,6 +189,10 @@ def test_us_tariff_provider_persists_real_tariff_evidence_with_provenance(tmp_pa
     assert snapshot["decision_inputs"]["tariff_recommended_actions"]
     tariff_impact = payload["sections"]["tariff_selection_impact"]
     assert tariff_impact["manual_review_required"] is True
+    executive_summary = payload["sections"]["executive_summary"]
+    assert executive_summary["manual_review_required"] is True
+    assert executive_summary["evidence_audit_manual_review_required"] is False
+    assert executive_summary["customs_broker_review_required"] is True
     assert tariff_impact["selection_impact"]
     assert "landed cost" in " ".join(tariff_impact["selection_impact"])
     assert any(
@@ -208,7 +212,6 @@ def _write_tariff_artifacts(tmp_path: Path) -> tuple[Path, Path]:
             {
                 "mappings": [
                     {
-                        "segment_id": "pet_water_fountain",
                         "segment_id": "fountains",
                         "product_types": ["Fountains"],
                         "keywords": ["pet fountain"],

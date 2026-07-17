@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import re
 import sqlite3
 from collections.abc import Iterable
 from contextlib import closing
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-import re
 from typing import Any
 
 import yaml
@@ -64,7 +64,11 @@ class USTariffProvider:
             )
             return result
 
-        matched_entries = match_hs_mappings(self._mappings, product_name=query.product_name, product_type=query.product_type)
+        matched_entries = match_hs_mappings(
+            self._mappings,
+            product_name=query.product_name,
+            product_type=query.product_type,
+        )
         if not matched_entries:
             result.data_gaps.append(
                 DataGap(

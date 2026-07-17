@@ -24,6 +24,8 @@ env/
 *.sqlite3
 *.sqlite-shm
 *.sqlite-wal
+*.db-shm
+*.db-wal
 data/chroma/
 data/demo/
 data/uploads/*
