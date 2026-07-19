@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import {
   ArrowRight,
@@ -372,6 +372,12 @@ function PageHeader({ eyebrow, title, description, action }: {
 
 function App() {
   const [page, setPage] = useState<PageKey>(pageFromHash)
+  const [themeFrom, setThemeFrom] = useState<PageKey>(pageFromHash)
+  const [themeTo, setThemeTo] = useState<PageKey>(pageFromHash)
+  const [themeTransitioning, setThemeTransitioning] = useState(false)
+  const pageRef = useRef(page)
+  const themeFrameRef = useRef<number | null>(null)
+  const themeTimerRef = useRef<number | null>(null)
   const [decisionSection, setDecisionSection] = useState<DecisionSection>(() => (
     window.location.hash === '#strategy' ? 'strategy' : 'report'
   ))
@@ -420,17 +426,48 @@ function App() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
+  const startPageTransition = useCallback((nextPage: PageKey) => {
+    const currentPage = pageRef.current
+    if (currentPage === nextPage) {
+      setPage(nextPage)
+      setThemeTo(nextPage)
+      return
+    }
+    if (themeFrameRef.current !== null) window.cancelAnimationFrame(themeFrameRef.current)
+    if (themeTimerRef.current !== null) window.clearTimeout(themeTimerRef.current)
+    setThemeFrom(currentPage)
+    setThemeTo(nextPage)
+    setThemeTransitioning(false)
+    pageRef.current = nextPage
+    setPage(nextPage)
+    themeFrameRef.current = window.requestAnimationFrame(() => {
+      themeFrameRef.current = window.requestAnimationFrame(() => {
+        themeFrameRef.current = null
+        setThemeTransitioning(true)
+        themeTimerRef.current = window.setTimeout(() => {
+          setThemeFrom(nextPage)
+          setThemeTransitioning(false)
+          themeTimerRef.current = null
+        }, 760)
+      })
+    })
+  }, [])
+
   useEffect(() => {
     const onHashChange = () => {
       const hash = window.location.hash.replace('#', '')
-      setPage(pageFromHash())
+      startPageTransition(pageFromHash())
       if (hash === 'strategy' || hash === 'report') setDecisionSection(hash)
       if (hash === 'evidence' || hash === 'tariff' || hash === 'audit') setAuditSection(hash)
     }
     window.addEventListener('hashchange', onHashChange)
     if (!window.location.hash) window.history.replaceState(null, '', '#workspace')
-    return () => window.removeEventListener('hashchange', onHashChange)
-  }, [])
+    return () => {
+      window.removeEventListener('hashchange', onHashChange)
+      if (themeFrameRef.current !== null) window.cancelAnimationFrame(themeFrameRef.current)
+      if (themeTimerRef.current !== null) window.clearTimeout(themeTimerRef.current)
+    }
+  }, [startPageTransition])
 
   useEffect(() => {
     localStorage.setItem('tradepilot-sidebar-collapsed', String(sidebarCollapsed))
@@ -611,7 +648,7 @@ function App() {
 
   const navigate = (target: PageKey) => {
     window.location.assign(`#${target}`)
-    setPage(target)
+    startPageTransition(target)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -1413,6 +1450,11 @@ function App() {
     <>
       <a className="skip-link" href="#main-content">跳到主要内容</a>
       <div className={`app-shell theme-${page} ${sidebarCollapsed ? 'sidebar-is-collapsed' : ''}`}>
+        <div className={`theme-backdrop ${themeTransitioning ? 'is-transitioning' : ''}`} aria-hidden="true">
+          <span className={`theme-bg-layer palette-${themeFrom}`} />
+          <span className={`theme-bg-layer theme-bg-next palette-${themeTo}`} />
+        </div>
+        <span className={`theme-transition-mask ${themeTransitioning ? 'is-transitioning' : ''}`} aria-hidden="true" />
         <ParticleField />
         <aside className="sidebar" aria-label="主导航">
           <div className="sidebar-top">
