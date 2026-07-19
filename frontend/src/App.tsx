@@ -333,6 +333,9 @@ function ParticleField() {
     <div className="particle-field" aria-hidden="true">
       <span className="ambient-orb orb-one" />
       <span className="ambient-orb orb-two" />
+      <span className="pixel-sky pixel-sky-far" />
+      <span className="pixel-sky pixel-sky-near" />
+      <span className="pixel-ground" />
       {particles.map((particle, index) => (
         <i
           key={index}
@@ -1424,7 +1427,7 @@ function App() {
             <span className="nav-caption">FOUR AGENTS</span>
             {navigation.map((item) => {
               const Icon = item.icon
-              return <a key={item.key} className={page === item.key ? 'active' : ''} href={`#${item.key}`} title={sidebarCollapsed ? item.label : undefined}><Icon weight={page === item.key ? 'fill' : 'regular'} /><span><strong>{item.label}</strong><small>{item.caption}</small></span><em>{item.agent}</em>{page === item.key && <i />}</a>
+              return <a key={item.key} className={`nav-link nav-${item.key} ${page === item.key ? 'active' : ''}`} href={`#${item.key}`} title={sidebarCollapsed ? item.label : undefined}><Icon weight={page === item.key ? 'fill' : 'regular'} /><span><strong>{item.label}</strong><small>{item.caption}</small></span><em>{item.agent}</em>{page === item.key && <i />}</a>
             })}
           </nav>
 
@@ -1440,7 +1443,7 @@ function App() {
             <div className="breadcrumb"><span>TRADEPILOT</span><b>/</b><strong>{navigation.find((item) => item.key === page)?.label}</strong></div>
             <div className="topbar-actions"><span className="real-badge"><i /> REAL</span><span className={`system-state ${connected === false ? 'offline' : ''}`}><i />{connected ? 'API ONLINE' : connected === false ? 'API OFFLINE' : 'CONNECTING'}</span></div>
           </header>
-          <div className="content-stage">
+          <div className={`content-stage content-stage-${page}`} key={page}>
             {page === 'workspace' && renderWorkspace()}
             {page === 'agents' && renderAgents()}
             {page === 'decision' && renderDecisionHub()}
