@@ -1937,3 +1937,356 @@ footer strong { color: var(--ink); font: 600 13px/1 'Fira Code', monospace; }
   .particle-field > i, .radar-rings span:nth-child(3) { display: none; }
   .page-view::before { animation: none; }
 }
+
+/* Motion system v3: one ambient signature and one interaction layer per Agent page. */
+.motion-orbit,
+.motion-beam,
+.motion-scanline {
+  position: absolute;
+  display: block;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+.motion-orbit {
+  border: 1px solid color-mix(in srgb,var(--page-button) 28%,transparent);
+  border-radius: 50%;
+  opacity: 0;
+}
+.motion-orbit::before,
+.motion-orbit::after {
+  content: '';
+  position: absolute;
+  border-radius: inherit;
+}
+.motion-orbit::before {
+  inset: 12%;
+  border: 1px dashed color-mix(in srgb,var(--page-button) 22%,transparent);
+}
+.motion-orbit::after {
+  top: 8%;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  background: var(--page-button);
+  box-shadow: 0 0 16px color-mix(in srgb,var(--page-button) 58%,transparent);
+  transform: translateX(-50%);
+}
+.motion-orbit-one { top: 13vh; right: 5vw; width: min(38vw,560px); aspect-ratio: 1; }
+.motion-orbit-two { bottom: -13rem; left: 11vw; width: min(30vw,420px); aspect-ratio: 1; }
+
+.motion-beam {
+  top: -38vh;
+  left: -16vw;
+  width: 24vw;
+  min-width: 220px;
+  height: 176vh;
+  opacity: 0;
+  background: linear-gradient(90deg,transparent,color-mix(in srgb,var(--page-button) 13%,white),transparent);
+  transform: translate3d(-42vw,0,0) rotate(18deg);
+}
+
+.motion-scanline {
+  top: 74px;
+  right: 0;
+  left: 0;
+  height: 2px;
+  opacity: 0;
+  background: linear-gradient(90deg,transparent 4%,color-mix(in srgb,var(--page-button) 55%,transparent) 50%,transparent 96%);
+  box-shadow: 0 0 18px color-mix(in srgb,var(--page-button) 26%,transparent);
+  transform: translate3d(0,-12vh,0);
+}
+
+.ambient-orb { will-change: transform, opacity; }
+.orb-one { animation: ambient-orb-one 18s ease-in-out infinite alternate; }
+.orb-two { animation: ambient-orb-two 22s ease-in-out infinite alternate; }
+
+/* A01 / white: calm data packets and a wide optical sweep. */
+.theme-workspace .particle-field > i {
+  border-radius: 1px;
+  background: #70a8e0;
+  box-shadow: 0 0 8px rgba(112,168,224,.25);
+  opacity: .2;
+  animation: workspace-data-drift var(--particle-duration) var(--particle-delay) ease-in-out infinite alternate;
+}
+.theme-workspace .motion-beam { animation: workspace-beam 11s 1s ease-in-out infinite; }
+.theme-workspace .motion-orbit-one {
+  opacity: .22;
+  border-radius: 18%;
+  animation: workspace-grid-turn 26s linear infinite;
+}
+.theme-workspace .motion-orbit-one::before { border-radius: 12%; }
+.theme-workspace .motion-orbit-one::after { border-radius: 1px; }
+
+/* A02 / pink: soft collaboration rings and petal-like signal particles. */
+.theme-agents .particle-field > i {
+  border-radius: 70% 12% 70% 12%;
+  background: #e06487;
+  box-shadow: 0 0 10px rgba(224,100,135,.22);
+  opacity: .24;
+  animation: agents-signal-drift var(--particle-duration) var(--particle-delay) ease-in-out infinite;
+}
+.theme-agents .motion-orbit-one { opacity: .3; animation: agents-orbit 20s linear infinite; }
+.theme-agents .motion-orbit-two { opacity: .2; animation: agents-orbit-reverse 26s linear infinite; }
+.theme-agents .motion-beam {
+  width: 16vw;
+  background: linear-gradient(90deg,transparent,rgba(255,182,193,.2),transparent);
+  animation: agents-flow-beam 9s 1.6s ease-in-out infinite;
+}
+
+/* A03 / brown: warm paper light and slow dust movement. */
+.theme-decision .particle-field > i {
+  border-radius: 50%;
+  background: #a0724f;
+  box-shadow: 0 0 7px rgba(107,72,50,.18);
+  opacity: .18;
+  animation: decision-dust var(--particle-duration) var(--particle-delay) ease-in-out infinite alternate;
+}
+.theme-decision .motion-beam {
+  width: 30vw;
+  background: linear-gradient(90deg,transparent,rgba(255,248,235,.34),rgba(160,114,79,.08),transparent);
+  animation: decision-paper-light 13s 2s ease-in-out infinite;
+}
+.theme-decision .motion-orbit-two {
+  opacity: .18;
+  border-radius: 22%;
+  animation: decision-seal 30s linear infinite;
+}
+.theme-decision .motion-orbit-two::before { border-radius: 16%; }
+
+/* A04 / blue: archive scan and vertical data rain. */
+.theme-audit .particle-field > i {
+  width: 2px;
+  height: calc(var(--particle-size) * 5);
+  border-radius: 1px;
+  background: linear-gradient(#82b6f0,transparent);
+  box-shadow: 0 0 9px rgba(130,182,240,.28);
+  opacity: .25;
+  animation: audit-data-rain var(--particle-duration) var(--particle-delay) linear infinite;
+}
+.theme-audit .motion-scanline { opacity: .34; animation: audit-scan 8s ease-in-out infinite; }
+.theme-audit .motion-orbit-one { opacity: .16; animation: audit-radar 24s linear infinite; }
+.theme-audit .particle-field::before { animation: audit-grid-breathe 6s ease-in-out infinite alternate; }
+
+/* Staggered page composition: the shell arrives first, then working surfaces. */
+.page-workspace .workspace-layout > *,
+.page-agents > .run-command,
+.page-agents > .workflow-canvas,
+.page-agents > .timeline-panel,
+.decision-hub > .section-switcher,
+.page-strategy > .strategy-hero,
+.page-strategy > .strategy-grid,
+.page-strategy > .strategy-evidence-cta,
+.page-report > .report-shell,
+.history-hub .history-statbar,
+.history-hub .history-workbench > *,
+.history-hub .history-archive {
+  animation: surface-arrive 560ms cubic-bezier(.16,1,.3,1) both;
+}
+.page-workspace .workspace-layout > :nth-child(1),
+.page-agents > .run-command,
+.decision-hub > .section-switcher,
+.history-hub .history-statbar { animation-delay: 80ms; }
+.page-workspace .workspace-layout > :nth-child(2),
+.page-agents > .workflow-canvas,
+.page-strategy > .strategy-hero,
+.page-report > .report-shell,
+.history-hub .history-workbench > :nth-child(1) { animation-delay: 150ms; }
+.page-agents > .timeline-panel,
+.page-strategy > .strategy-grid,
+.history-hub .history-workbench > :nth-child(2) { animation-delay: 220ms; }
+.page-strategy > .strategy-evidence-cta,
+.history-hub .history-workbench > :nth-child(3) { animation-delay: 290ms; }
+.history-hub .history-archive { animation-delay: 360ms; }
+
+.strategy-grid > article,
+.timeline-grid > li,
+.guardrail-grid > article {
+  animation: detail-arrive 480ms cubic-bezier(.16,1,.3,1) both;
+}
+.strategy-grid > article:nth-child(2), .timeline-grid > li:nth-child(2), .guardrail-grid > article:nth-child(2) { animation-delay: 70ms; }
+.strategy-grid > article:nth-child(3), .timeline-grid > li:nth-child(3), .guardrail-grid > article:nth-child(3) { animation-delay: 120ms; }
+.strategy-grid > article:nth-child(4), .timeline-grid > li:nth-child(4), .guardrail-grid > article:nth-child(4) { animation-delay: 170ms; }
+.strategy-grid > article:nth-child(5) { animation-delay: 220ms; }
+.strategy-grid > article:nth-child(6) { animation-delay: 270ms; }
+
+/* High-value interaction feedback on compact, clickable or inspectable units. */
+:is(.flow-agent-card,.serial-agent,.strategy-card,.timeline-grid > li,.review-boundary-card,.guardrail-grid > article,.history-family-list > button,.history-version-strip > button,.report-node) {
+  transition: transform 220ms cubic-bezier(.16,1,.3,1), border-color 220ms ease, box-shadow 220ms ease, background 300ms ease;
+}
+:is(.flow-agent-card,.serial-agent,.strategy-card,.timeline-grid > li,.review-boundary-card,.guardrail-grid > article,.history-family-list > button,.history-version-strip > button,.report-node):hover {
+  transform: translate3d(0,-4px,0);
+  border-color: color-mix(in srgb,var(--page-button) 68%,var(--page-border));
+  box-shadow: 0 13px 28px color-mix(in srgb,var(--page-text) 12%,transparent);
+}
+.report-node:hover > svg:last-child,
+.history-family-list > button:hover > svg:last-child,
+.primary-button:hover > svg:last-child,
+.compact-button:hover > svg:last-child { transform: translate3d(4px,0,0); }
+.report-node > svg:last-child,
+.history-family-list > button > svg:last-child,
+.primary-button > svg:last-child,
+.compact-button > svg:last-child { transition: transform 180ms cubic-bezier(.16,1,.3,1); }
+
+.page-header .eyebrow,
+.workflow-title .eyebrow,
+.section-title .eyebrow {
+  position: relative;
+  overflow: hidden;
+}
+.page-header .eyebrow::after,
+.workflow-title .eyebrow::after,
+.section-title .eyebrow::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: label-draw 620ms 260ms cubic-bezier(.16,1,.3,1) both;
+}
+
+.page-workspace .brief-visual img { animation: logo-hover 5s ease-in-out infinite; }
+.page-workspace .radar-rings { animation: radar-breathe 4.8s ease-in-out infinite; }
+.page-agents .agent-flow.is-running :is(.flow-agent-card,.serial-agent).status-running { animation: active-agent-breathe 2.4s ease-in-out infinite; }
+.page-agents .flow-legend i,
+.real-badge i,
+.system-state i,
+.connection-dot { animation: signal-breathe 2.2s ease-in-out infinite; }
+.decision-hub .strategy-orbit svg,
+.decision-hub .placeholder-orbit svg { animation: decision-icon-hover 4s ease-in-out infinite; }
+.theme-audit .history-library,
+.theme-audit .history-agent-panel { position: relative; }
+.theme-audit .history-document-panel::before,
+.theme-audit .history-library::before,
+.theme-audit .history-agent-panel::before {
+  content: '';
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  bottom: 0;
+  left: -34%;
+  width: 24%;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(90deg,transparent,rgba(130,182,240,.12),transparent);
+  transform: skewX(-12deg);
+  animation: archive-panel-glint 10s ease-in-out infinite;
+}
+
+@keyframes ambient-orb-one {
+  from { opacity: .07; transform: translate3d(0,0,0) scale(.92); }
+  to { opacity: .14; transform: translate3d(-7vw,5vh,0) scale(1.08); }
+}
+@keyframes ambient-orb-two {
+  from { opacity: .06; transform: translate3d(0,0,0) scale(1); }
+  to { opacity: .12; transform: translate3d(6vw,-4vh,0) scale(.9); }
+}
+@keyframes workspace-data-drift {
+  from { opacity: .08; transform: translate3d(-7px,10px,0) scale(.7); }
+  to { opacity: .32; transform: translate3d(13px,-18px,0) scale(1.15); }
+}
+@keyframes workspace-beam {
+  0%, 14% { opacity: 0; transform: translate3d(-42vw,0,0) rotate(18deg); }
+  28%, 54% { opacity: .46; }
+  70%, 100% { opacity: 0; transform: translate3d(158vw,0,0) rotate(18deg); }
+}
+@keyframes workspace-grid-turn { to { transform: rotate(360deg); } }
+@keyframes agents-signal-drift {
+  0% { opacity: 0; transform: translate3d(-8px,-18px,0) rotate(0deg) scale(.72); }
+  30% { opacity: .3; }
+  100% { opacity: 0; transform: translate3d(34px,92px,0) rotate(130deg) scale(1.12); }
+}
+@keyframes agents-orbit { to { transform: rotate(360deg) scale(1.04); } }
+@keyframes agents-orbit-reverse { to { transform: rotate(-360deg) scale(.94); } }
+@keyframes agents-flow-beam {
+  0%, 18% { opacity: 0; transform: translate3d(-42vw,0,0) rotate(18deg); }
+  38%, 55% { opacity: .6; }
+  76%, 100% { opacity: 0; transform: translate3d(156vw,0,0) rotate(18deg); }
+}
+@keyframes decision-dust {
+  from { opacity: .08; transform: translate3d(-4px,8px,0) scale(.75); }
+  to { opacity: .3; transform: translate3d(12px,-26px,0) scale(1.08); }
+}
+@keyframes decision-paper-light {
+  0%, 20% { opacity: 0; transform: translate3d(-48vw,0,0) rotate(18deg); }
+  38%, 58% { opacity: .48; }
+  75%, 100% { opacity: 0; transform: translate3d(154vw,0,0) rotate(18deg); }
+}
+@keyframes decision-seal { to { transform: rotate(360deg); } }
+@keyframes audit-data-rain {
+  0% { opacity: 0; transform: translate3d(0,-34px,0) scaleY(.65); }
+  22% { opacity: .32; }
+  100% { opacity: 0; transform: translate3d(8px,112px,0) scaleY(1.2); }
+}
+@keyframes audit-scan {
+  0%, 12% { opacity: 0; transform: translate3d(0,-12vh,0); }
+  26%, 72% { opacity: .36; }
+  88%, 100% { opacity: 0; transform: translate3d(0,88vh,0); }
+}
+@keyframes audit-radar { to { transform: rotate(360deg); } }
+@keyframes audit-grid-breathe { from { opacity: .08; } to { opacity: .2; } }
+@keyframes surface-arrive {
+  from { opacity: 0; transform: translate3d(0,20px,0) scale(.99); }
+  to { opacity: 1; transform: translate3d(0,0,0) scale(1); }
+}
+@keyframes detail-arrive {
+  from { opacity: 0; transform: translate3d(0,14px,0); }
+  to { opacity: 1; transform: translate3d(0,0,0); }
+}
+@keyframes label-draw { to { transform: scaleX(1); } }
+@keyframes logo-hover {
+  0%, 100% { transform: translate3d(0,0,0); }
+  50% { transform: translate3d(0,-8px,0); }
+}
+@keyframes radar-breathe {
+  0%, 100% { opacity: .72; transform: scale(.96); }
+  50% { opacity: 1; transform: scale(1.04); }
+}
+@keyframes active-agent-breathe {
+  0%, 100% { opacity: .9; transform: translate3d(0,0,0); }
+  50% { opacity: 1; transform: translate3d(0,-3px,0); }
+}
+@keyframes signal-breathe {
+  0%, 100% { opacity: .58; transform: scale(.86); }
+  50% { opacity: 1; transform: scale(1.14); }
+}
+@keyframes decision-icon-hover {
+  0%, 100% { transform: translate3d(0,0,0) rotate(-2deg); }
+  50% { transform: translate3d(0,-5px,0) rotate(2deg); }
+}
+@keyframes archive-panel-glint {
+  0%, 70% { opacity: 0; transform: translate3d(0,0,0) skewX(-12deg); }
+  80% { opacity: .9; }
+  100% { opacity: 0; transform: translate3d(560%,0,0) skewX(-12deg); }
+}
+
+@media (max-width: 720px) {
+  .motion-orbit { opacity: .1 !important; }
+  .motion-orbit-two { display: none; }
+  .particle-field > i:nth-of-type(2n) { display: none; }
+  .motion-beam { width: 42vw; }
+  :is(.flow-agent-card,.serial-agent,.strategy-card,.timeline-grid > li,.review-boundary-card,.guardrail-grid > article,.history-family-list > button,.history-version-strip > button,.report-node):hover { transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-orbit,
+  .motion-beam,
+  .motion-scanline,
+  .ambient-orb,
+  .theme-audit .history-document-panel::before,
+  .theme-audit .history-library::before,
+  .theme-audit .history-agent-panel::before { display: none !important; }
+  .page-workspace .brief-visual img,
+  .page-workspace .radar-rings,
+  .page-agents .agent-flow.is-running :is(.flow-agent-card,.serial-agent).status-running,
+  .decision-hub .strategy-orbit svg,
+  .decision-hub .placeholder-orbit svg,
+  .page-agents .flow-legend i,
+  .real-badge i,
+  .system-state i,
+  .connection-dot { animation: none !important; }
+}

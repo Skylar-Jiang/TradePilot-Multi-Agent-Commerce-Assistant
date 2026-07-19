@@ -333,6 +333,10 @@ function ParticleField() {
     <div className="particle-field" aria-hidden="true">
       <span className="ambient-orb orb-one" />
       <span className="ambient-orb orb-two" />
+      <span className="motion-orbit motion-orbit-one" />
+      <span className="motion-orbit motion-orbit-two" />
+      <span className="motion-beam" />
+      <span className="motion-scanline" />
       <span className="pixel-sky pixel-sky-far" />
       <span className="pixel-sky pixel-sky-near" />
       <span className="pixel-ground" />
