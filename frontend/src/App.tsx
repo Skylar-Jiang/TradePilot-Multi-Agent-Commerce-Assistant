@@ -321,7 +321,7 @@ function tariffSections(report: ReportView | null) {
 }
 
 function ParticleField() {
-  const particles = useMemo(() => Array.from({ length: 22 }, (_, index) => ({
+  const particles = useMemo(() => Array.from({ length: 30 }, (_, index) => ({
     left: `${(index * 41 + 13) % 97}%`,
     top: `${(index * 67 + 11) % 91}%`,
     delay: `${(index % 7) * -0.73}s`,
