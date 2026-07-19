@@ -83,7 +83,8 @@ def test_customer_service_targeted_regeneration_creates_student_focused_new_repo
     assert strategy["customer_service_adjustment"]["evidence_ids"] == original_strategy["evidence_ids"]
     for item in original_strategy["launch_actions"]:
         assert item in strategy["launch_actions"]
-    assert updated_report["sections"]["data_supported_conclusions"][-1]["evidence_ids"] == original_strategy["evidence_ids"]
+    conclusion_evidence_ids = updated_report["sections"]["data_supported_conclusions"][-1]["evidence_ids"]
+    assert conclusion_evidence_ids == original_strategy["evidence_ids"]
     for item in original_report["sections"]["next_actions"]:
         assert item in updated_report["sections"]["next_actions"]
 

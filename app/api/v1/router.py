@@ -13,13 +13,13 @@ from app.api.responses import API_ERROR_RESPONSES, success
 from app.core.enums import FileType, RunStatus
 from app.db.repositories.sqlalchemy import SqlAlchemyAnalysisRepository
 from app.schemas.analysis import AnalysisRunCreate, AnalysisRunRead, FeedbackCreate
+from app.schemas.api import ConversationRead, FeedbackAccepted, HealthRead, KnowledgeRebuildRead
+from app.schemas.common import ApiResponse
 from app.schemas.customer_service import (
     CustomerServiceConversationRead,
     CustomerServiceMessageRequest,
     CustomerServiceMessageResponse,
 )
-from app.schemas.api import ConversationRead, FeedbackAccepted, HealthRead, KnowledgeRebuildRead
-from app.schemas.common import ApiResponse
 from app.schemas.product import ProductCreate, ProductFileRead, ProductProfile
 from app.schemas.report import FinalReport, ReportRollbackRequest, ReportSupportRequest
 from app.services.analysis_service import AnalysisService

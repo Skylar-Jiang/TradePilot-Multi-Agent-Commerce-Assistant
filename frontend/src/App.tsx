@@ -12,16 +12,18 @@ import {
   Database,
   FileText,
   Fingerprint,
-  FlowArrow,
   Globe,
+  Headset,
   Lightning,
   ListChecks,
   Megaphone,
   Package,
+  PaperPlaneTilt,
   Play,
   Pulse,
   Receipt,
   RocketLaunch,
+  Robot,
   Scales,
   ShieldCheck,
   SidebarSimple,
@@ -30,6 +32,7 @@ import {
   UploadSimple,
   UsersThree,
   WarningCircle,
+  X,
   XCircle,
 } from '@phosphor-icons/react'
 import ReactMarkdown from 'react-markdown'
@@ -38,6 +41,9 @@ import {
   api,
   type AgentView,
   type AuditResult,
+  type CustomerServiceConversationMessage,
+  type CustomerServiceMessageResponse,
+  type CustomerServicePersonality,
   type EvidenceReference,
   type ReportView,
   type RunStage,
@@ -46,7 +52,9 @@ import {
 } from './api'
 import { productCategoryOptions, targetMarketOptions } from './catalogOptions'
 
-type PageKey = 'workspace' | 'agents' | 'strategy' | 'evidence' | 'tariff' | 'audit' | 'report'
+type PageKey = 'workspace' | 'agents' | 'decision' | 'audit'
+type DecisionSection = 'strategy' | 'report'
+type AuditSection = 'audit' | 'tariff' | 'evidence'
 
 type MarketingStrategy = {
   positioning?: string
@@ -187,20 +195,36 @@ const agentDefinitions = [
   },
 ] as const
 
-const navigation: Array<{ key: PageKey; label: string; caption: string; icon: typeof Lightning }> = [
-  { key: 'workspace', label: '任务创建', caption: '真实商品分析', icon: Lightning },
-  { key: 'agents', label: 'Agent 协作', caption: '四角色流程', icon: FlowArrow },
-  { key: 'strategy', label: '营销策略', caption: '定位与上市动作', icon: Megaphone },
-  { key: 'evidence', label: '证据中心', caption: '来源与原文详情', icon: Fingerprint },
-  { key: 'tariff', label: '关税合规', caption: '美国 HTS 证据', icon: Receipt },
-  { key: 'audit', label: '证据审校', caption: '风险与护栏', icon: ShieldCheck },
-  { key: 'report', label: '决策报告', caption: 'Markdown 输出', icon: FileText },
+const navigation: Array<{ key: PageKey; label: string; caption: string; icon: typeof Lightning; agent: string }> = [
+  { key: 'workspace', label: '商品市场', caption: '任务创建 · 白', icon: ChartLineUp, agent: 'A01' },
+  { key: 'agents', label: '用户洞察', caption: '协作流程 · 粉', icon: UsersThree, agent: 'A02' },
+  { key: 'decision', label: '运营决策', caption: '策略报告 · 棕', icon: Compass, agent: 'A03' },
+  { key: 'audit', label: '证据审校', caption: '关税证据 · 蓝', icon: ShieldCheck, agent: 'A04' },
+]
+
+const legacyPageAliases: Record<string, PageKey> = {
+  strategy: 'decision',
+  report: 'decision',
+  evidence: 'audit',
+  tariff: 'audit',
+}
+
+const personalityOptions: Array<{
+  value: CustomerServicePersonality
+  label: string
+  caption: string
+}> = [
+  { value: 'simple', label: '简洁', caption: '直接给结论' },
+  { value: 'professional', label: '专业', caption: '严谨解释' },
+  { value: 'companion', label: '陪伴', caption: '温和协作' },
+  { value: 'innovative', label: '创新', caption: '启发式表达' },
 ]
 
 const terminalStatuses: RunStatus[] = ['succeeded', 'failed', 'manual_review']
 
 function pageFromHash(): PageKey {
   const value = window.location.hash.replace('#', '')
+  if (legacyPageAliases[value]) return legacyPageAliases[value]
   return navigation.some((item) => item.key === value) ? value as PageKey : 'workspace'
 }
 
@@ -228,6 +252,19 @@ function statusText(status?: string) {
     rejected: '未通过',
   }
   return labels[status || 'pending'] || status || '待命'
+}
+
+function customerActionText(action?: string) {
+  const labels: Record<string, string> = {
+    explain: '解释当前方案',
+    targeted_regeneration: '已生成增量版本',
+    positioning_edit: '已调整产品定位',
+    marketing_copy_edit: '已调整营销表达',
+    promotion_strategy_edit: '已调整推广策略',
+    clarification_required: '需要补充信息',
+    reject: '已守住证据边界',
+  }
+  return labels[action || ''] || action || '等待对话'
 }
 
 function statusIcon(status?: string) {
@@ -313,6 +350,14 @@ function PageHeader({ eyebrow, title, description, action }: {
 
 function App() {
   const [page, setPage] = useState<PageKey>(pageFromHash)
+  const [decisionSection, setDecisionSection] = useState<DecisionSection>(() => (
+    window.location.hash === '#strategy' ? 'strategy' : 'report'
+  ))
+  const [auditSection, setAuditSection] = useState<AuditSection>(() => {
+    if (window.location.hash === '#tariff') return 'tariff'
+    if (window.location.hash === '#evidence') return 'evidence'
+    return 'audit'
+  })
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     const saved = localStorage.getItem('tradepilot-sidebar-collapsed')
     return saved === 'true' || window.innerWidth < 1120
@@ -334,11 +379,24 @@ function App() {
   const [evidenceError, setEvidenceError] = useState('')
   const [report, setReport] = useState<ReportView | null>(null)
   const [markdown, setMarkdown] = useState('')
+  const [assistantOpen, setAssistantOpen] = useState(false)
+  const [personality, setPersonality] = useState<CustomerServicePersonality>('professional')
+  const [conversationId, setConversationId] = useState<string | null>(null)
+  const [customerMessages, setCustomerMessages] = useState<CustomerServiceConversationMessage[]>([])
+  const [customerInput, setCustomerInput] = useState('')
+  const [customerBusy, setCustomerBusy] = useState(false)
+  const [customerError, setCustomerError] = useState('')
+  const [customerResult, setCustomerResult] = useState<CustomerServiceMessageResponse | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    const onHashChange = () => setPage(pageFromHash())
+    const onHashChange = () => {
+      const hash = window.location.hash.replace('#', '')
+      setPage(pageFromHash())
+      if (hash === 'strategy' || hash === 'report') setDecisionSection(hash)
+      if (hash === 'evidence' || hash === 'tariff' || hash === 'audit') setAuditSection(hash)
+    }
     window.addEventListener('hashchange', onHashChange)
     if (!window.location.hash) window.history.replaceState(null, '', '#workspace')
     return () => window.removeEventListener('hashchange', onHashChange)
@@ -458,12 +516,22 @@ function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  const openDecision = (section: DecisionSection) => {
+    setDecisionSection(section)
+    navigate('decision')
+  }
+
+  const openAudit = (section: AuditSection) => {
+    setAuditSection(section)
+    navigate('audit')
+  }
+
   const showEvidence = async (evidenceId: string) => {
     if (!runId || evidenceBusy) return
     setSelectedEvidenceId(evidenceId)
     setEvidenceBusy(true)
     setEvidenceError('')
-    if (page !== 'evidence') navigate('evidence')
+    if (page !== 'audit' || auditSection !== 'evidence') openAudit('evidence')
     try {
       const result = await api.evidenceDetail(runId, evidenceId)
       setSelectedEvidence(result.evidence)
@@ -472,6 +540,47 @@ function App() {
       setEvidenceError(detailError instanceof Error ? detailError.message : '证据详情读取失败。')
     } finally {
       setEvidenceBusy(false)
+    }
+  }
+
+  const refreshCustomerConversation = async (reportId: string, nextConversationId: string) => {
+    const conversation = await api.customerServiceConversation(reportId, nextConversationId)
+    setConversationId(conversation.conversation_id)
+    setPersonality(conversation.personality)
+    setCustomerMessages(conversation.messages)
+  }
+
+  const handleCustomerMessage = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const message = customerInput.trim()
+    if (!report || !message || customerBusy) return
+    setCustomerBusy(true)
+    setCustomerError('')
+    setCustomerInput('')
+    setCustomerMessages((current) => [
+      ...current,
+      { message_id: `optimistic-${Date.now()}`, role: 'user', content: message, metadata: {} },
+    ])
+    try {
+      const result = await api.customerServiceMessage(report.report_id, {
+        conversation_id: conversationId,
+        message,
+        personality,
+      })
+      setCustomerResult(result)
+      const [latestReport, latestMarkdown] = await Promise.all([
+        api.report(result.report_id),
+        api.markdown(result.report_id),
+        refreshCustomerConversation(result.report_id, result.conversation_id),
+      ])
+      setReport(latestReport)
+      setMarkdown(latestMarkdown)
+    } catch (customerServiceError) {
+      setCustomerError(customerServiceError instanceof Error ? customerServiceError.message : '客服 Agent 暂时无法响应。')
+      setCustomerMessages((current) => current.filter((item) => !item.message_id.startsWith('optimistic-')))
+      setCustomerInput(message)
+    } finally {
+      setCustomerBusy(false)
     }
   }
 
@@ -491,6 +600,12 @@ function App() {
     setEvidenceError('')
     setReport(null)
     setMarkdown('')
+    setAssistantOpen(false)
+    setConversationId(null)
+    setCustomerMessages([])
+    setCustomerInput('')
+    setCustomerError('')
+    setCustomerResult(null)
 
     try {
       const product = await api.createProduct({
@@ -523,9 +638,9 @@ function App() {
   const renderWorkspace = () => (
     <div className="page-view page-workspace">
       <PageHeader
-        eyebrow="REAL COMMERCE INTELLIGENCE"
-        title="创建真实分析任务"
-        description="输入新品资料，系统将调用真实模型、同类商品数据与四个 Agent 完成决策分析。"
+        eyebrow="A01 · PRODUCT MARKET AGENT"
+        title="商品市场与任务创建"
+        description="用新品资料建立真实分析任务，并为商品市场 Agent 准备同类商品、价格、RAG 与税则数据。"
         action={<span className="real-badge"><i /> REAL MODE ONLY</span>}
       />
 
@@ -649,9 +764,9 @@ function App() {
   const renderAgents = () => (
     <div className="page-view page-agents">
       <PageHeader
-        eyebrow="LIVE AGENT ORCHESTRATION"
-        title="四 Agent 协作流程"
-        description="这里展示后端真实执行状态：两路并行洞察汇聚为运营决策，再进入证据审校。"
+        eyebrow="A02 · USER INSIGHT AGENT"
+        title="用户洞察与 Agent 协作"
+        description="查看同类用户洞察如何与市场信号并行汇聚，再交给运营决策与证据审校。"
         action={<span className={`status-pill status-${runStatus || 'pending'}`}>{statusIcon(runStatus || 'pending')}{runStatus ? statusText(runStatus) : '等待任务'}</span>}
       />
 
@@ -710,10 +825,10 @@ function App() {
           })}
           <div className="flow-line line-down"><i /></div>
           <div className="output-nodes">
-            <button className={`report-node status-${report ? 'succeeded' : 'pending'}`} onClick={() => navigate('strategy')}>
+            <button className={`report-node status-${report ? 'succeeded' : 'pending'}`} onClick={() => openDecision('strategy')}>
               <Megaphone weight="duotone" /><span><small>STRATEGY</small><strong>查看上市营销策略</strong></span><ArrowRight weight="bold" />
             </button>
-            <button className={`report-node status-${report ? 'succeeded' : 'pending'}`} onClick={() => navigate('report')}>
+            <button className={`report-node status-${report ? 'succeeded' : 'pending'}`} onClick={() => openDecision('report')}>
               <FileText weight="duotone" /><span><small>REPORT</small><strong>查看 Markdown 决策报告</strong></span><ArrowRight weight="bold" />
             </button>
           </div>
@@ -780,7 +895,7 @@ function App() {
                 )
               })}
             </section>
-            <section className="strategy-evidence-cta glass-panel"><div><BookOpenText weight="duotone" /><span><strong>策略结论可追溯</strong><small>通过友好编号查看支持每条结论的真实商品、评论和税则资料。</small></span></div><button className="compact-button" onClick={() => navigate('evidence')}>打开证据中心 <ArrowRight weight="bold" /></button></section>
+            <section className="strategy-evidence-cta glass-panel"><div><BookOpenText weight="duotone" /><span><strong>策略结论可追溯</strong><small>通过友好编号查看支持每条结论的真实商品、评论和税则资料。</small></span></div><button className="compact-button" onClick={() => openAudit('evidence')}>打开证据中心 <ArrowRight weight="bold" /></button></section>
           </>
         ) : (
           <section className="report-placeholder glass-panel">
@@ -955,13 +1070,63 @@ function App() {
     </div>
   )
 
+  const renderCustomerService = () => !assistantOpen ? null : (
+    <>
+      <button className="assistant-scrim" aria-label="关闭客服 AI" onClick={() => setAssistantOpen(false)} />
+      <aside className="customer-service-drawer" role="dialog" aria-modal="false" aria-labelledby="customer-service-title">
+        <header className="customer-service-head">
+          <span className="customer-service-avatar"><Robot weight="duotone" /></span>
+          <div><small>REPORT COPILOT</small><h2 id="customer-service-title">报告客服 AI</h2><p>解释结论、澄清需求，并在证据边界内生成增量版本。</p></div>
+          <button className="icon-button" aria-label="关闭客服 AI" onClick={() => setAssistantOpen(false)}><X weight="bold" /></button>
+        </header>
+
+        {!report ? (
+          <div className="customer-service-locked"><FileText weight="thin" /><h3>等待分析报告</h3><p>四个 Agent 完成分析并生成报告后，客服 AI 才能基于真实结论继续对话。</p><button className="compact-button" onClick={() => { setAssistantOpen(false); navigate(runId ? 'agents' : 'workspace') }}>{runId ? '查看 Agent 进度' : '创建分析任务'}</button></div>
+        ) : (
+          <>
+            <fieldset className="personality-picker" disabled={customerBusy}>
+              <legend>选择客服回复风格</legend>
+              <div>{personalityOptions.map((option) => <button type="button" className={personality === option.value ? 'active' : ''} aria-pressed={personality === option.value} key={option.value} onClick={() => setPersonality(option.value)}><strong>{option.label}</strong><small>{option.caption}</small></button>)}</div>
+            </fieldset>
+
+            <div className="customer-conversation" aria-live="polite">
+              {!customerMessages.length && (
+                <div className="assistant-welcome"><span><Sparkle weight="duotone" /></span><div><strong>你好，我是报告客服 Agent</strong><p>我不会脱离证据整份重写，但可以解释建议、追问需求，或局部调整目标人群、定位、文案和推广策略。</p></div></div>
+              )}
+              {customerMessages.map((message) => <article className={`customer-message role-${message.role}`} key={message.message_id}><span>{message.role === 'assistant' ? <Robot weight="duotone" /> : <ChatCircleText weight="duotone" />}</span><div><small>{message.role === 'assistant' ? '客服 AI' : '你'}</small><p>{message.content}</p></div></article>)}
+              {customerBusy && <article className="customer-message role-assistant is-thinking"><span><Robot weight="duotone" /></span><div><small>客服 AI</small><p><Pulse className="spin" weight="bold" /> 正在识别意图并核对报告边界…</p></div></article>}
+              {customerError && <div className="customer-error" role="alert"><WarningCircle weight="fill" />{customerError}</div>}
+              {customerResult && (
+                <div className="customer-action-card">
+                  <div><span>{customerActionText(customerResult.action_taken)}</span><strong>报告 v{customerResult.report_version}</strong></div>
+                  {!!customerResult.change_summary.length && <ul>{customerResult.change_summary.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul>}
+                  {!!customerResult.pending_questions.length && <div className="pending-questions"><small>请继续补充</small>{customerResult.pending_questions.map((question) => <button type="button" key={question} onClick={() => setCustomerInput(question)}>{question}</button>)}</div>}
+                </div>
+              )}
+            </div>
+
+            {!customerMessages.length && <div className="customer-prompts" aria-label="客服 AI 示例问题">
+              {['为什么建议优先做内容种草？', '目标用户调整为大学生群体', '把定位调整得更高端一些', '推广策略调整得更保守一些'].map((prompt) => <button type="button" key={prompt} onClick={() => setCustomerInput(prompt)}>{prompt}</button>)}
+            </div>}
+
+            <form className="customer-composer" onSubmit={handleCustomerMessage}>
+              <label htmlFor="customer-message">继续修改或追问报告</label>
+              <div><textarea id="customer-message" rows={3} value={customerInput} onChange={(event) => setCustomerInput(event.target.value)} placeholder="例如：为什么建议优先做内容种草？" disabled={customerBusy} /><button type="submit" aria-label="发送给客服 AI" disabled={customerBusy || !customerInput.trim()}>{customerBusy ? <Pulse className="spin" weight="bold" /> : <PaperPlaneTilt weight="fill" />}</button></div>
+              <small>客服 AI 只修改被明确指出的模块，不会编造销量、转化率或证据。</small>
+            </form>
+          </>
+        )}
+      </aside>
+    </>
+  )
+
   const renderReport = () => (
     <div className="page-view page-report">
       <PageHeader
         eyebrow="DECISION DOCUMENT"
         title="上市分析报告"
         description="四个 Agent 完成协作与审校后，系统在这里呈现可继续编辑和交付的 Markdown 报告。"
-        action={report ? <span className={`status-pill status-${report.audit_status}`}>{statusIcon(report.audit_status)}版本 {report.version} · {statusText(report.audit_status)}</span> : undefined}
+        action={<div className="report-header-actions">{report && <span className={`status-pill status-${report.audit_status}`}>{statusIcon(report.audit_status)}版本 {report.version} · {statusText(report.audit_status)}</span>}<button className="assistant-launch-button" onClick={() => setAssistantOpen(true)}><Headset weight="duotone" /><span><strong>客服 AI</strong><small>{report ? '解释或增量修改报告' : '报告生成后可用'}</small></span></button></div>}
       />
       {markdown ? (
         <section className="report-shell glass-panel">
@@ -972,7 +1137,7 @@ function App() {
               a: ({ href, children }) => {
                 const match = href?.match(/\/analysis-runs\/[^/]+\/evidence\/(.+)$/)
                 if (match) {
-                  return <a href="#evidence" onClick={(event) => { event.preventDefault(); void showEvidence(decodeURIComponent(match[1])) }}>{children}</a>
+                  return <a href="#audit" onClick={(event) => { event.preventDefault(); void showEvidence(decodeURIComponent(match[1])) }}>{children}</a>
                 }
                 return <a href={href} target="_blank" rel="noreferrer">{children}</a>
               },
@@ -992,10 +1157,35 @@ function App() {
     </div>
   )
 
+  const renderDecisionHub = () => (
+    <div className="page-hub decision-hub">
+      <nav className="section-switcher" aria-label="运营决策子页面">
+        <button className={decisionSection === 'strategy' ? 'active' : ''} aria-pressed={decisionSection === 'strategy'} onClick={() => setDecisionSection('strategy')}><Megaphone weight="duotone" /><span><strong>营销策略</strong><small>定位与上市动作</small></span></button>
+        <button className={decisionSection === 'report' ? 'active' : ''} aria-pressed={decisionSection === 'report'} onClick={() => setDecisionSection('report')}><FileText weight="duotone" /><span><strong>决策报告</strong><small>Markdown 与版本</small></span></button>
+        <button className="assistant-tab" onClick={() => setAssistantOpen(true)}><Headset weight="duotone" /><span><strong>客服 AI</strong><small>解释 · 澄清 · 增量修改</small></span><i>{conversationId ? '会话中' : 'NEW'}</i></button>
+      </nav>
+      {decisionSection === 'strategy' ? renderStrategy() : renderReport()}
+      {renderCustomerService()}
+    </div>
+  )
+
+  const renderAuditHub = () => (
+    <div className="page-hub audit-hub">
+      <nav className="section-switcher" aria-label="证据审校子页面">
+        <button className={auditSection === 'audit' ? 'active' : ''} aria-pressed={auditSection === 'audit'} onClick={() => setAuditSection('audit')}><ShieldCheck weight="duotone" /><span><strong>审校结果</strong><small>结论与复核边界</small></span></button>
+        <button className={auditSection === 'tariff' ? 'active' : ''} aria-pressed={auditSection === 'tariff'} onClick={() => setAuditSection('tariff')}><Receipt weight="duotone" /><span><strong>关税合规</strong><small>美国 HTS 证据</small></span></button>
+        <button className={auditSection === 'evidence' ? 'active' : ''} aria-pressed={auditSection === 'evidence'} onClick={() => setAuditSection('evidence')}><Fingerprint weight="duotone" /><span><strong>证据中心</strong><small>来源与原文详情</small></span></button>
+      </nav>
+      {auditSection === 'audit' && renderAudit()}
+      {auditSection === 'tariff' && renderTariff()}
+      {auditSection === 'evidence' && renderEvidence()}
+    </div>
+  )
+
   return (
     <>
       <a className="skip-link" href="#main-content">跳到主要内容</a>
-      <div className={`app-shell ${sidebarCollapsed ? 'sidebar-is-collapsed' : ''}`}>
+      <div className={`app-shell theme-${page} ${sidebarCollapsed ? 'sidebar-is-collapsed' : ''}`}>
         <ParticleField />
         <aside className="sidebar" aria-label="主导航">
           <div className="sidebar-top">
@@ -1007,10 +1197,10 @@ function App() {
           </div>
 
           <nav className="sidebar-nav">
-            <span className="nav-caption">WORKSPACE</span>
+            <span className="nav-caption">FOUR AGENTS</span>
             {navigation.map((item) => {
               const Icon = item.icon
-              return <a key={item.key} className={page === item.key ? 'active' : ''} href={`#${item.key}`} title={sidebarCollapsed ? item.label : undefined}><Icon weight={page === item.key ? 'fill' : 'regular'} /><span><strong>{item.label}</strong><small>{item.caption}</small></span>{page === item.key && <i />}</a>
+              return <a key={item.key} className={page === item.key ? 'active' : ''} href={`#${item.key}`} title={sidebarCollapsed ? item.label : undefined}><Icon weight={page === item.key ? 'fill' : 'regular'} /><span><strong>{item.label}</strong><small>{item.caption}</small></span><em>{item.agent}</em>{page === item.key && <i />}</a>
             })}
           </nav>
 
@@ -1029,11 +1219,8 @@ function App() {
           <div className="content-stage">
             {page === 'workspace' && renderWorkspace()}
             {page === 'agents' && renderAgents()}
-            {page === 'strategy' && renderStrategy()}
-            {page === 'evidence' && renderEvidence()}
-            {page === 'tariff' && renderTariff()}
-            {page === 'audit' && renderAudit()}
-            {page === 'report' && renderReport()}
+            {page === 'decision' && renderDecisionHub()}
+            {page === 'audit' && renderAuditHub()}
           </div>
           <footer><div><strong>TradePilot</strong><span>基于多智能体的跨境商品智能运营决策助手</span></div><span>证据优先 · 过程透明 · 人机共决策</span></footer>
         </main>

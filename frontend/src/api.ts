@@ -127,6 +127,42 @@ export interface ReportView {
   sections: Record<string, unknown>
 }
 
+export type CustomerServicePersonality = 'simple' | 'professional' | 'companion' | 'innovative'
+
+export interface CustomerServiceMessageResponse {
+  conversation_id: string
+  intent: string
+  affected_modules: string[]
+  action_taken: string
+  reply: string
+  report_id: string
+  report_version: number
+  changed_section_ids: string[]
+  change_summary: string[]
+  pending_questions: string[]
+}
+
+export interface CustomerServiceConversationMessage {
+  message_id: string
+  role: 'user' | 'assistant' | string
+  content: string
+  metadata: Record<string, unknown>
+}
+
+export interface CustomerServiceConversation {
+  conversation_id: string
+  report_id: string
+  personality: CustomerServicePersonality
+  confirmed_requirements: string[]
+  pending_questions: string[]
+  last_intent: string | null
+  last_affected_modules: string[]
+  latest_report_id: string | null
+  latest_report_version: number | null
+  modification_history: Array<Record<string, unknown>>
+  messages: CustomerServiceConversationMessage[]
+}
+
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '')
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -188,6 +224,17 @@ export const api = {
   audit: (runId: string) =>
     request<{ run_id: string; audit: AuditResult | null }>(`/analysis-runs/${runId}/audit`),
   report: (reportId: string) => request<ReportView>(`/reports/${reportId}`),
+  customerServiceMessage: (
+    reportId: string,
+    payload: { conversation_id: string | null; message: string; personality: CustomerServicePersonality },
+  ) => request<CustomerServiceMessageResponse>(`/reports/${reportId}/customer-service/messages`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  customerServiceConversation: (reportId: string, conversationId: string) =>
+    request<CustomerServiceConversation>(
+      `/reports/${reportId}/customer-service/conversations/${encodeURIComponent(conversationId)}`,
+    ),
   markdown: async (reportId: string) => {
     const response = await fetch(`${API_BASE}/reports/${reportId}/markdown`)
     if (!response.ok) throw new Error(`报告读取失败（${response.status}）`)

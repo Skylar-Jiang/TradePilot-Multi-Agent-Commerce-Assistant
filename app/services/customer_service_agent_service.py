@@ -1029,11 +1029,20 @@ class CustomerServiceAgentService:
     def _audience_rules(audience: str) -> dict[str, object]:
         if STUDENT_AUDIENCE_KEYWORD in audience:
             return dict(STUDENT_AUDIENCE_RULES)
-        if any(keyword in audience for keyword in WHITE_COLLAR_KEYWORDS) or audience == WHITE_COLLAR_AUDIENCE_RULES["audience_label"]:
+        if (
+            any(keyword in audience for keyword in WHITE_COLLAR_KEYWORDS)
+            or audience == WHITE_COLLAR_AUDIENCE_RULES["audience_label"]
+        ):
             return dict(WHITE_COLLAR_AUDIENCE_RULES)
-        if any(keyword in audience for keyword in BEGINNER_PET_OWNER_KEYWORDS) or audience == BEGINNER_PET_OWNER_RULES["audience_label"]:
+        if (
+            any(keyword in audience for keyword in BEGINNER_PET_OWNER_KEYWORDS)
+            or audience == BEGINNER_PET_OWNER_RULES["audience_label"]
+        ):
             return dict(BEGINNER_PET_OWNER_RULES)
-        if any(keyword in audience for keyword in MULTI_PET_KEYWORDS) or audience == MULTI_PET_AUDIENCE_RULES["audience_label"]:
+        if (
+            any(keyword in audience for keyword in MULTI_PET_KEYWORDS)
+            or audience == MULTI_PET_AUDIENCE_RULES["audience_label"]
+        ):
             return dict(MULTI_PET_AUDIENCE_RULES)
         return {
             "audience_label": audience,
