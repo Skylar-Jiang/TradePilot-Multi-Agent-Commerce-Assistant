@@ -900,13 +900,13 @@ function App() {
             <div className="radar-rings"><span /><span /><span /></div>
             <img src="/tradepilot-team-logo.png" alt="TradePilot 四位 Agent 团队 Logo" />
           </div>
-          <span className="eyebrow">MISSION PROFILE</span>
-          <h2>四个 Agent，完成一次可审计决策</h2>
-          <p>市场分析与用户洞察并行运行，运营决策汇总信号，证据审校最后把关。</p>
+          <span className="eyebrow">页面使用说明</span>
+          <h2>填写商品信息，创建跨境运营分析</h2>
+          <p>本页面用于提交待上市商品与目标市场信息。填写得越完整，系统匹配的同类商品和生成的运营建议就越准确。</p>
           <ol className="mini-process">
-            <li><span>01</span><div><strong>真实数据准备</strong><small>同行匹配 · RAG · SQL · HTS 税则</small></div></li>
-            <li><span>02</span><div><strong>双 Agent 并行分析</strong><small>市场 + 用户洞察</small></div></li>
-            <li><span>03</span><div><strong>决策与证据审校</strong><small>允许一次审校退回</small></div></li>
+            <li><span>01</span><div><strong>描述待上市商品</strong><small>填写名称、类别、功能特点与使用场景</small></div></li>
+            <li><span>02</span><div><strong>确定目标市场</strong><small>选择销售国家、目标售价并按需上传资料</small></div></li>
+            <li><span>03</span><div><strong>启动智能分析</strong><small>系统将生成市场洞察、运营策略与可审校报告</small></div></li>
           </ol>
           <div className={`connection-card ${connected === false ? 'offline' : ''}`}>
             <i />
