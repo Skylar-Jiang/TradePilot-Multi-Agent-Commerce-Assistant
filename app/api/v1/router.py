@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
+from app.api.auth import require_shared_access
 from app.api.deps import get_db
 from app.api.responses import API_ERROR_RESPONSES, success
 from app.core.enums import FileType, RunStatus
@@ -30,7 +31,8 @@ from app.services.product_service import ProductService
 from app.services.report_support_service import ReportSupportService
 from app.workflows.metadata import agent_frontend_view, workflow_metadata
 
-router = APIRouter(prefix="/api/v1")
+public_router = APIRouter(prefix="/api/v1")
+router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_shared_access)])
 DbSession = Annotated[Session, Depends(get_db)]
 UploadedFile = Annotated[UploadFile, File()]
 FileTypeForm = Annotated[FileType, Form()]
@@ -47,7 +49,7 @@ def analysis_service(request: Request, session: Session) -> AnalysisService:
     )
 
 
-@router.get(
+@public_router.get(
     "/health",
     summary="TradePilot health and implementation status",
     response_model=ApiResponse[HealthRead],
@@ -117,7 +119,9 @@ def add_product_file(
 def create_analysis_run(
     request: Request, payload: AnalysisRunCreate, session: DbSession
 ):  # type: ignore[no-untyped-def]
-    run = analysis_service(request, session).create(payload)
+    run = request.app.state.analysis_admission.admit(
+        lambda: analysis_service(request, session).create(payload)
+    )
     request.app.state.run_dispatcher.submit(run.run_id)
     return success(request, run, status_code=202, data_mode=payload.data_mode.value)
 

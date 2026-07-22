@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.responses import failure
-from app.api.v1.router import router
+from app.api.v1.router import public_router, router
 from app.background.providers import build_default_background_registry
 from app.background.registry import BackgroundProviderRegistry
 from app.core.config import Settings, get_settings
@@ -20,6 +20,7 @@ from app.core.logging import configure_logging, log_http_request
 from app.db.migrations import upgrade_database
 from app.rag.factory import KnowledgeStoreFactory, create_knowledge_store
 from app.rag.in_memory import InMemoryKnowledgeStore
+from app.services.analysis_admission import AnalysisAdmission
 from app.services.run_dispatcher import RunDispatcher
 from app.statistics.factory import StatisticsProviderFactory, create_statistics_provider
 
@@ -74,6 +75,10 @@ def create_app(
         application.state.knowledge_store_factory = worker_knowledge_store
         application.state.statistics_provider_factory = statistics_provider_factory
         application.state.background_registry = background_registry or build_default_background_registry(resolved)
+        application.state.analysis_admission = AnalysisAdmission(
+            requests=resolved.analysis_rate_limit_requests,
+            window_seconds=resolved.analysis_rate_limit_window_seconds,
+        )
         application.state.run_dispatcher = RunDispatcher(
             session_factory=session_factory,
             knowledge_store_factory=worker_knowledge_store,
@@ -87,6 +92,7 @@ def create_app(
         application.state.run_dispatcher.shutdown()
         engine.dispose()
 
+    expose_docs = resolved.app_env.strip().lower() == "development"
     application = FastAPI(
         title="TradePilot Backend",
         version=resolved.app_version,
@@ -95,6 +101,9 @@ def create_app(
             "and Markdown/JSON reports."
         ),
         lifespan=lifespan,
+        docs_url="/docs" if expose_docs else None,
+        redoc_url="/redoc" if expose_docs else None,
+        openapi_url="/openapi.json" if expose_docs else None,
     )
     if resolved.cors_origins:
         application.add_middleware(
@@ -102,7 +111,7 @@ def create_app(
             allow_origins=resolved.cors_origins,
             allow_credentials=False,
             allow_methods=["GET", "POST", "OPTIONS"],
-            allow_headers=["Accept", "Content-Type", "Last-Event-ID", "X-Request-ID"],
+            allow_headers=["Accept", "Authorization", "Content-Type", "Last-Event-ID", "X-Request-ID"],
         )
     if resolved.allowed_hosts:
         application.add_middleware(TrustedHostMiddleware, allowed_hosts=resolved.allowed_hosts)
@@ -135,13 +144,16 @@ def create_app(
 
     @application.exception_handler(TradePilotError)
     async def tradepilot_error(request: Request, exc: TradePilotError):  # type: ignore[no-untyped-def]
-        return failure(
+        response = failure(
             request,
             status_code=exc.status_code,
             code=exc.code.value,
             message=exc.message,
             details=exc.details,
         )
+        if exc.status_code == 401:
+            response.headers["WWW-Authenticate"] = "Bearer"
+        return response
 
     @application.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError):  # type: ignore[no-untyped-def]
@@ -153,6 +165,7 @@ def create_app(
             details=exc.errors(),
         )
 
+    application.include_router(public_router)
     application.include_router(router)
     return application
 

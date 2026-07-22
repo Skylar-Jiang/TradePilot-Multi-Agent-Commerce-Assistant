@@ -1,3 +1,5 @@
+import { clearSharedAccessCode, getSharedAccessCode } from './auth'
+
 export type DataMode = 'demo' | 'real'
 export type RunStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'manual_review'
 export type StageStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped'
@@ -95,6 +97,8 @@ export interface WorkflowMetadata {
   nodes: WorkflowNode[]
   edges: string[][]
   audit_retry_limit: number
+  workspace_mode: 'shared_demo'
+  workspace_notice: string
 }
 
 export interface AuditResult {
@@ -187,24 +191,48 @@ export interface CustomerServiceConversation {
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '')
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export class ApiRequestError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message)
+  }
+}
+
+async function apiFetch(
+  path: string,
+  init?: RequestInit,
+  options?: { accessCode?: string | null; anonymous?: boolean },
+): Promise<Response> {
+  const headers = new Headers(init?.headers)
+  if (!(init?.body instanceof FormData) && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json')
+  }
+  const accessCode = options?.anonymous ? null : (options?.accessCode ?? getSharedAccessCode())
+  if (accessCode) headers.set('Authorization', `Bearer ${accessCode}`)
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
-    headers: {
-      ...(init?.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
-      ...init?.headers,
-    },
+    headers,
   })
+  if (response.status === 401) clearSharedAccessCode()
+  return response
+}
 
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  options?: { accessCode?: string | null; anonymous?: boolean },
+): Promise<T> {
+  const response = await apiFetch(path, init, options)
   const payload = (await response.json()) as ApiEnvelope<T>
   if (!response.ok || !payload.success || payload.data === null) {
-    throw new Error(payload.error?.message || `请求失败（${response.status}）`)
+    throw new ApiRequestError(payload.error?.message || `请求失败（${response.status}）`, response.status)
   }
   return payload.data
 }
 
 export const api = {
-  health: () => request<{ service: string; status: string }>('/health'),
+  health: () => request<{ service: string; status: string }>('/health', undefined, { anonymous: true }),
+  verifyAccess: (accessCode: string) =>
+    request<WorkflowMetadata>('/workflow/metadata', undefined, { accessCode }),
   workflow: () => request<WorkflowMetadata>('/workflow/metadata'),
   createProduct: (payload: ProductPayload) =>
     request<ProductProfile>('/products', { method: 'POST', body: JSON.stringify(payload) }),
@@ -261,8 +289,8 @@ export const api = {
       `/reports/${reportId}/customer-service/conversations/${encodeURIComponent(conversationId)}`,
     ),
   markdown: async (reportId: string) => {
-    const response = await fetch(`${API_BASE}/reports/${reportId}/markdown`)
-    if (!response.ok) throw new Error(`报告读取失败（${response.status}）`)
+    const response = await apiFetch(`/reports/${reportId}/markdown`)
+    if (!response.ok) throw new ApiRequestError(`报告读取失败（${response.status}）`, response.status)
     return response.text()
   },
 }

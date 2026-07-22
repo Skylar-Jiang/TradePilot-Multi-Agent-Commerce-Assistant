@@ -32,6 +32,7 @@ import {
   Scales,
   ShieldCheck,
   SidebarSimple,
+  SignOut,
   Sparkle,
   Target,
   UploadSimple,
@@ -43,6 +44,7 @@ import {
 import ReactMarkdown from 'react-markdown'
 import { SearchableCombobox } from './SearchableCombobox'
 import {
+  ApiRequestError,
   api,
   type AgentView,
   type AuditResult,
@@ -57,6 +59,12 @@ import {
   type RunStatus,
   type WorkflowMetadata,
 } from './api'
+import {
+  ACCESS_CLEARED_EVENT,
+  clearSharedAccessCode,
+  hasSharedAccessCode,
+  saveSharedAccessCode,
+} from './auth'
 import { productCategoryOptions, targetMarketOptions } from './catalogOptions'
 
 type PageKey = 'workspace' | 'agents' | 'decision' | 'audit'
@@ -372,7 +380,7 @@ function PageHeader({ title, description, action }: {
   )
 }
 
-function App() {
+function WorkspaceApp({ onLogout }: { onLogout: () => void }) {
   const [page, setPage] = useState<PageKey>(pageFromHash)
   const [themeFrom, setThemeFrom] = useState<PageKey>(pageFromHash)
   const [themeTo, setThemeTo] = useState<PageKey>(pageFromHash)
@@ -1460,7 +1468,7 @@ function App() {
           </nav>
 
           <div className="sidebar-foot">
-            <div className={`connection ${connected === false ? 'offline' : ''}`}><span className="connection-dot" /><div><strong>{connected === null ? '正在连接' : connected ? '系统在线' : '等待后端'}</strong><small>{connected ? 'Real 工作流已就绪' : '启动服务后即可分析'}</small></div></div>
+            <div className={`connection ${connected === false ? 'offline' : ''}`}><span className="connection-dot" /><div><strong>{connected === null ? '正在连接' : connected ? '系统在线' : '等待后端'}</strong><small>{connected ? '共享工作区已就绪' : '启动服务后即可分析'}</small></div></div>
           </div>
         </aside>
 
@@ -1468,7 +1476,11 @@ function App() {
           <header className="topbar">
             <button className="mobile-sidebar-toggle" onClick={() => setSidebarCollapsed((value) => !value)} aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}><SidebarSimple weight="bold" /></button>
             <div className="breadcrumb"><strong>{navigation.find((item) => item.key === page)?.label}</strong></div>
-            <div className="topbar-actions"><span className={`system-state ${connected === false ? 'offline' : ''}`}><i />{connected ? '系统可用' : connected === false ? '系统未连接' : '正在连接'}</span></div>
+            <div className="topbar-actions">
+              <span className="shared-workspace-label">内部演示 · 共享工作区</span>
+              <span className={`system-state ${connected === false ? 'offline' : ''}`}><i />{connected ? '系统可用' : connected === false ? '系统未连接' : '正在连接'}</span>
+              <button className="demo-logout-button" type="button" onClick={() => { clearSharedAccessCode(); onLogout() }}><SignOut weight="bold" />退出演示环境</button>
+            </div>
           </header>
           <div className={`content-stage content-stage-${page}`} key={page}>
             {page === 'workspace' && renderWorkspace()}
@@ -1481,6 +1493,81 @@ function App() {
       </div>
     </>
   )
+}
+
+function AccessGate({ onAuthenticated }: { onAuthenticated: () => void }) {
+  const [accessCode, setAccessCode] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!accessCode.trim() || busy) return
+    setBusy(true)
+    setError('')
+    try {
+      await api.verifyAccess(accessCode)
+      saveSharedAccessCode(accessCode)
+      setAccessCode('')
+      onAuthenticated()
+    } catch (caught) {
+      setError(
+        caught instanceof ApiRequestError && caught.status === 401
+          ? '访问码无效或已失效，请重新输入。'
+          : '暂时无法连接演示环境，请稍后重试。',
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <main className="access-gate">
+      <section className="access-card" aria-labelledby="access-title">
+        <div className="access-brand">
+          <span className="brand-logo-frame"><img src="/tradepilot-team-logo.png" alt="" /></span>
+          <span><strong>TradePilot</strong><small>Shared private staging</small></span>
+        </div>
+        <div className="access-heading">
+          <span><ShieldCheck weight="duotone" /></span>
+          <div><p>项目成员访问</p><h1 id="access-title">进入共享演示工作区</h1></div>
+        </div>
+        <p className="access-notice">内部演示环境，项目成员共享记录与记忆。</p>
+        <form onSubmit={submit}>
+          <label htmlFor="shared-access-code">共享访问码</label>
+          <input
+            id="shared-access-code"
+            type="password"
+            autoComplete="current-password"
+            value={accessCode}
+            onChange={(event) => setAccessCode(event.target.value)}
+            placeholder="请输入项目共享访问码"
+            autoFocus
+          />
+          {error && <p className="access-error" role="alert">{error}</p>}
+          <button className="primary-button" type="submit" disabled={busy || !accessCode.trim()}>
+            {busy ? <Pulse className="spin" weight="bold" /> : <ArrowRight weight="bold" />}
+            {busy ? '正在验证' : '进入演示环境'}
+          </button>
+        </form>
+        <p className="access-boundary">商品、Agent Run、Conversation、Memory、Upload 与 Report 对所有获准成员共享。</p>
+      </section>
+    </main>
+  )
+}
+
+function App() {
+  const [authenticated, setAuthenticated] = useState(hasSharedAccessCode)
+
+  useEffect(() => {
+    const handleAccessCleared = () => setAuthenticated(false)
+    window.addEventListener(ACCESS_CLEARED_EVENT, handleAccessCleared)
+    return () => window.removeEventListener(ACCESS_CLEARED_EVENT, handleAccessCleared)
+  }, [])
+
+  return authenticated
+    ? <WorkspaceApp onLogout={() => setAuthenticated(false)} />
+    : <AccessGate onAuthenticated={() => setAuthenticated(true)} />
 }
 
 export default App

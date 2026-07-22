@@ -10,6 +10,8 @@ from app.background.registry import BackgroundProviderRegistry
 from app.core.config import Settings
 from app.core.enums import DataMode, ErrorCode, KnowledgeType, RetrievalScope, RunStageStatus, RunStatus
 from app.core.exceptions import (
+    AnalysisAlreadyRunningError,
+    AnalysisCapacityReachedError,
     DataPreparationRequiredError,
     LLMNotConfiguredError,
     ScaffoldOnlyError,
@@ -127,6 +129,10 @@ class AnalysisService:
         if payload.data_mode is DataMode.MOCK:
             raise ScaffoldOnlyError("mock")
         self.products.get(payload.product_id)
+        if self.analyses.has_active_run_for_product(payload.product_id):
+            raise AnalysisAlreadyRunningError()
+        if self.analyses.count_active_runs() >= self.settings.analysis_max_active_runs:
+            raise AnalysisCapacityReachedError()
         run = self.analyses.create_run(payload)
         self.analyses.initialize_stages(run.run_id, self.STAGE_KEYS)
         self.analyses.append_event(

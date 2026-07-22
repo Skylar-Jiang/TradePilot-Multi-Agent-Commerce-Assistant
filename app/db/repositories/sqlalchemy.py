@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.core.enums import AgentStatus, AuditStatus, DataOrigin, RunStageStatus, RunStatus
@@ -84,6 +84,21 @@ class SqlAlchemyAnalysisRepository:
         self.session.commit()
         self.session.refresh(record)
         return self._to_run(record)
+
+    def has_active_run_for_product(self, product_id: str) -> bool:
+        active_statuses = (RunStatus.PENDING.value, RunStatus.RUNNING.value)
+        statement = select(AnalysisRun.run_id).where(
+            AnalysisRun.product_id == product_id,
+            AnalysisRun.status.in_(active_statuses),
+        )
+        return self.session.scalar(statement.limit(1)) is not None
+
+    def count_active_runs(self) -> int:
+        active_statuses = (RunStatus.PENDING.value, RunStatus.RUNNING.value)
+        statement = select(func.count()).select_from(AnalysisRun).where(
+            AnalysisRun.status.in_(active_statuses)
+        )
+        return int(self.session.scalar(statement) or 0)
 
     def get_run(self, run_id: str) -> AnalysisRunRead:
         record = self.session.get(AnalysisRun, run_id)

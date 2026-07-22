@@ -7,7 +7,7 @@ from app.schemas.common import ApiResponse, ResponseMeta
 
 API_ERROR_RESPONSES: dict[int, dict[str, object]] = {
     status: {"model": ApiResponse[None], "description": "Unified TradePilot error envelope"}
-    for status in (400, 404, 422, 503)
+    for status in (400, 401, 404, 409, 422, 429, 503)
 }
 
 

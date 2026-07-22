@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _ENVIRONMENT_NAME = re.compile(r"^[a-z0-9_-]+$")
@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     chroma_review_collection: str = "review_insight"
     upload_dir: Path = Path("data/uploads")
     report_dir: Path = Path("data/reports")
+    demo_backup_dir: Path = Path("data/backups")
 
     openai_api_key: str | None = None
     openai_base_url: str | None = None
@@ -91,10 +92,21 @@ class Settings(BaseSettings):
     trade_tariff_db_path: Path = Path("data/external/serving/tariff_rules.sqlite")
     peer_max_reviews: int = 300
     run_worker_count: int = Field(default=2, ge=1, le=8)
+    analysis_max_active_runs: int = Field(default=1, ge=1, le=8)
+    analysis_rate_limit_requests: int = Field(default=3, ge=1, le=60)
+    analysis_rate_limit_window_seconds: int = Field(default=60, ge=1, le=3600)
     sse_poll_interval_seconds: float = Field(default=0.1, gt=0, le=5)
     sse_heartbeat_seconds: float = Field(default=10, gt=0, le=60)
     log_level: str = "INFO"
     default_data_mode: str = Field(default="demo")
+
+    @model_validator(mode="after")
+    def require_shared_access_code_for_deployed_environments(self) -> "Settings":
+        if self.app_env.strip().lower() in {"staging", "production"} and not (
+            self.app_api_key and self.app_api_key.strip()
+        ):
+            raise ValueError("APP_API_KEY is required in staging and production")
+        return self
 
     @field_validator("cors_allowed_origins")
     @classmethod

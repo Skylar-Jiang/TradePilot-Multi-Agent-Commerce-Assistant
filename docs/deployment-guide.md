@@ -1,146 +1,148 @@
-# TradePilot 测试环境传统部署手册
+# TradePilot 私有共享测试环境部署手册
 
-本文只覆盖 Vercel 前端 Preview 与 Railway 后端 staging，不创建正式生产部署，不绑定自定义域名。
+本文只覆盖 Vercel 前端 Preview 与 Railway 后端 staging。不要 Promote 为 Production，不绑定自定义域名，也不要把占位符当成测试地址。
 
-## 1. 已确认的仓库结构
+## 1. 仓库与运行方式
 
-| 项目 | 目录 | 技术栈 | 安装 | 本地启动 | 构建/检查 |
+| 项目 | 目录 | 技术栈 | 安装 | 启动 | 构建/检查 |
 | --- | --- | --- | --- | --- | --- |
 | 后端 | 仓库根目录 | Python 3.12、FastAPI、Uvicorn、SQLAlchemy/Alembic、SQLite、Chroma | `python -m pip install -r requirements.txt` | `python -m uvicorn app.main:app --host 127.0.0.1 --port 8000` | `python -m pytest`、`python -m ruff check .` |
-| 前端 | `frontend` | React 19、TypeScript 6、Vite 8 | `npm ci` | `npm run dev` | `npm run lint`、`npm run build`，输出 `dist` |
+| 前端 | `frontend` | React 19、TypeScript 6、Vite 8 | `npm ci` | `npm run dev` | `npm run lint`、`npm run build`，产物为 `dist` |
 
-前端通过 `VITE_API_BASE_URL` 访问后端，未设置时使用 `/api/v1`。后端健康检查为 `GET /api/v1/health`，不调用外部模型。
+前端只通过 `VITE_API_BASE_URL` 获取后端 `/api/v1` 地址。访问码绝不能放入 `VITE_*`；浏览器首次进入时由成员输入。
 
-## 2. 部署前边界
+## 2. 访问控制与共享工作区
 
-- `.env`、`.env.*` 默认被 Git 忽略，只有 `.gitignore` 中明确列出的 example 模板允许跟踪。不要把真实值写进模板、日志、提交或前端的 `VITE_*` 变量。
-- `APP_API_KEY` 目前只是配置项，API 路由没有强制校验它。CORS 和 Trusted Host 也不是身份认证。因此测试后端生成公网域名后仍属于公开 API；建议先保持 `DEFAULT_DATA_MODE=demo`，不配置模型密钥，只放非敏感演示数据。
-- 两个 Git LFS 数据文件约为 616 MB 与 317 MB。Railway 从 GitHub 构建时是否取到真实 LFS 内容必须在构建日志或容器中验证；不能只凭健康检查认定 Real 模式可用。
-- 不要把本次 Preview/staging 提升为 Production，也不要绑定自定义域名。
+- `/api/v1/health` 是唯一匿名应用接口，Railway 健康检查不调用模型。
+- 其他 `/api/v1/*` 路由统一要求 `Authorization: Bearer <access-code>`。缺失或错误均返回 401，不回显正确值。
+- `APP_API_KEY` 在 staging/production 必填；缺失时应用拒绝启动。真实值只手工写入 Railway Variables。
+- staging/production 的 `/docs`、`/redoc` 和 `/openapi.json` 关闭。开发环境可保留文档，但文档页面不能绕过业务接口鉴权。
+- CORS 与 Trusted Host 只限制浏览器来源和 Host，不是认证替代品。
+- 前端验证通过后把访问码保存到当前标签页的 `sessionStorage`，所有业务请求自动附加 Bearer。收到 401 或点击“退出演示环境”时只清本地凭证，不删除服务器数据。
+- 当前没有账户、注册、用户表或 `user_id` 隔离。商品、Agent Run、Conversation、Memory、Report、Upload、公共 RAG 与 Chroma 都属于同一个 `shared_demo` 工作区，任何获准成员都可能看到或影响其他成员的数据。
 
-## 3. Railway 后端 staging 精确配置
+`sessionStorage` 可被同源 XSS 或恶意浏览器扩展读取，因此后端鉴权、HTTPS、CSP、无第三方脚本和访问码轮换仍是实际边界。共享码泄露后应立即在 Railway 轮换并重新部署。
 
-1. 新建 Railway Project 和名为 `staging` 的 Environment，从 GitHub 导入本仓库。
-2. Service 的 Root Directory 保持仓库根目录（留空或 `/`），不要填 `frontend`。
-3. Config as Code 路径使用 `/railway.json`。其中已设置：
-   - Builder：`RAILPACK`
-   - Start Command：`python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-   - Healthcheck Path：`/api/v1/health`
-   - Healthcheck Timeout：`300`
-   - Restart Policy：失败时重启，最多 5 次
-4. Build Command 留空，让 Railpack 根据 `.python-version`、`pyproject.toml` 和 `requirements.txt` 自动安装。Python 必须为 3.12.x。
-5. Replica 数量固定为 `1`。SQLite 与本地 Chroma 不适合多副本并发写入。
-6. 在这个 Service 上创建一个 Volume，Mount Path 精确填写 `/data`。Volume 在运行时挂载，不能在构建命令或 pre-deploy 命令中初始化。
-7. 将下表变量填入 Railway Variables。不要手工设置 `PORT`，Railway 会注入。
-8. 首次部署成功后，在 Settings → Networking 点击 **Generate Domain**，只使用 Railway 提供的测试域名，不添加 Custom Domain。
+## 3. Railway 后端 staging
 
-### Railway 变量
+1. 新建 Railway Project 和 `staging` Environment，从 GitHub 导入当前分支。
+2. Service Root Directory 留空（仓库根），Config as Code 使用 `/railway.json`。
+3. Builder 为 Railpack；启动命令为 `python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT`；健康检查为 `/api/v1/health`。
+4. Replica 数量固定为 `1`。SQLite、Chroma 和进程内准入锁均不支持这个阶段的多副本语义。
+5. 创建一个 Railway Volume，Mount Path 精确填写 `/data`。不要删除或 Wipe Volume 来重置演示数据。
+6. 在 Variables 中填写下表。不要手工设置 `PORT`。
+7. 首次发布后只生成 Railway 提供的 staging domain；不要添加 Custom Domain。
 
-| 名称 | staging 值/规则 | 是否敏感 |
-| --- | --- | --- |
-| `APP_ENV` | `staging` | 否 |
-| `APP_DEBUG` | `false` | 否 |
-| `CORS_ALLOWED_ORIGINS` | 首次可留空；Vercel 生成真实 Preview URL 后填完整 origin，多个值用逗号分隔 | 否 |
-| `TRUSTED_HOSTS` | `healthcheck.railway.app,*.up.railway.app,*.railway.internal` | 否 |
-| `DATABASE_URL` | `sqlite:////data/tradepilot.db` | 否 |
-| `CHROMA_DIR` | `/data/chroma` | 否 |
-| `CHROMA_PERSIST_DIR` | `/data/chroma` | 否 |
-| `UPLOAD_DIR` | `/data/uploads` | 否 |
-| `REPORT_DIR` | `/data/reports` | 否 |
-| `RAG_MANIFEST_PATH` | `/data/index-manifest.sqlite` | 否 |
-| `PEER_CACHE_DIR` | `/data/peer-cache` | 否 |
-| `TRADE_TARIFF_DB_PATH` | `/data/tariff-rules.sqlite` | 否 |
-| `PEER_METADATA_PATH` | `data/filtered/meta_pet_supplies_prefiltered.jsonl` | 否 |
-| `PEER_REVIEWS_PATH` | `data/filtered/pet_supplies_reviews_prefiltered.jsonl` | 否 |
-| `PEER_MATCH_CONFIG_PATH` | `config/peer_matching.yaml` | 否 |
-| `TRADE_HS_MAPPING_PATH` | `config/trade/hs_mapping.yaml` | 否 |
-| `DEFAULT_DATA_MODE` | 首次使用 `demo` | 否 |
-| `RAG_USE_CHROMA` | `true` | 否 |
-| `RUN_WORKER_COUNT` | `1` | 否 |
-| `LOG_LEVEL` | `INFO` | 否 |
-| `OPENAI_API_KEY`、`DEEPSEEK_API_KEY`、`QWEN_API_KEY` | 公网 demo staging 留空；只有增加访问控制后再作为 Railway Secret 配置 | 是 |
-| 模型与 RAG 调优变量 | 从 `.env.staging.example` 或 `.env.example` 复制所需项 | 部分敏感 |
+### Railway Variables
 
-`.env.staging.example` 只提供变量名和非秘密示例，不应上传为 Railway 的真实 env 文件。
+| 名称 | staging 值/规则 |
+| --- | --- |
+| `APP_ENV` | `staging` |
+| `APP_DEBUG` | `false` |
+| `APP_API_KEY` | 手工生成的高熵共享访问码；必填、Secret |
+| `CORS_ALLOWED_ORIGINS` | 实际 Vercel Preview origin；多个用逗号分隔；不带路径、不用 `*` |
+| `TRUSTED_HOSTS` | `healthcheck.railway.app,*.up.railway.app,*.railway.internal` |
+| `DATABASE_URL` | `sqlite:////data/tradepilot.db` |
+| `CHROMA_DIR` / `CHROMA_PERSIST_DIR` | `/data/chroma` |
+| `UPLOAD_DIR` | `/data/uploads` |
+| `REPORT_DIR` | `/data/reports` |
+| `DEMO_BACKUP_DIR` | `/data/backups` |
+| `RAG_MANIFEST_PATH` | `/data/index-manifest.sqlite` |
+| `PEER_CACHE_DIR` | `/data/peer-cache` |
+| `TRADE_TARIFF_DB_PATH` | `/data/tariff-rules.sqlite` |
+| `PEER_METADATA_PATH` | `data/filtered/meta_pet_supplies_prefiltered.jsonl` |
+| `PEER_REVIEWS_PATH` | `data/filtered/pet_supplies_reviews_prefiltered.jsonl` |
+| `PEER_MATCH_CONFIG_PATH` | `config/peer_matching.yaml` |
+| `TRADE_HS_MAPPING_PATH` | `config/trade/hs_mapping.yaml` |
+| `DEFAULT_DATA_MODE` | `demo`，完成真实数据和模型校验前不要改为 `real` |
+| `RAG_USE_CHROMA` | 按实际索引准备情况设置；真实模式通常为 `true` |
+| `RUN_WORKER_COUNT` | 推荐 `1` |
+| `ANALYSIS_MAX_ACTIVE_RUNS` | 推荐 `1` |
+| `ANALYSIS_RATE_LIMIT_REQUESTS` | 推荐 `3` |
+| `ANALYSIS_RATE_LIMIT_WINDOW_SECONDS` | 推荐 `60` |
+| `LOG_LEVEL` | `INFO` |
+| 模型、Embedding、Rerank 密钥 | 只放 Railway Secret；不得放 Git、日志或前端变量 |
 
-### 首次后端验证
+准入保护只对被接受的分析启动计数：同一商品存在 pending/running 任务时返回 409；共享工作区达到活跃任务上限或速率上限时返回 429。单进程锁与单副本配置共同防止并发创建；`RUN_WORKER_COUNT=1` 限制实际后台模型工作数。重启时最多恢复 `ANALYSIS_MAX_ACTIVE_RUNS` 个 pending 任务。
 
-将实际 Railway 地址记为 `https://<railway-domain>`，逐项验证：
+### 后端验证
+
+以下命令中的地址必须替换为平台真实生成并已打开的 staging 地址。输入访问码时不要打印或写入脚本：
 
 ```powershell
-Invoke-RestMethod https://<railway-domain>/api/v1/health
-Invoke-WebRequest https://<railway-domain>/openapi.json -UseBasicParsing
+$accessCode = Read-Host "Shared access code" -MaskInput
+Invoke-WebRequest https://<railway-domain>/api/v1/health -UseBasicParsing
+Invoke-WebRequest https://<railway-domain>/api/v1/workflow/metadata -SkipHttpErrorCheck -UseBasicParsing
+Invoke-WebRequest https://<railway-domain>/api/v1/workflow/metadata -Headers @{ Authorization = "Bearer $accessCode" } -UseBasicParsing
+Invoke-WebRequest https://<railway-domain>/openapi.json -SkipHttpErrorCheck -UseBasicParsing
+Remove-Variable accessCode
 ```
 
-两项都应返回 HTTP 200。还需检查部署日志确认 Alembic 升级成功，且不存在重启循环。Railway 的部署健康检查只在发布切换时执行，不是持续监控。
+预期依次为 200、401、200、404。还要确认 Alembic upgrade 成功、服务没有重启循环，且日志不包含访问码或模型密钥。
 
-## 4. Vercel 前端 Preview 精确配置
-
-在后端 Railway 测试域名真实生成且健康检查通过后再导入前端：
+## 4. Vercel 前端 Preview
 
 | Vercel 字段 | 精确值 |
 | --- | --- |
-| Repository | 同一 TradePilot 仓库 |
+| Repository | 同一 TradePilot 仓库和当前 staging 分支 |
 | Root Directory | `frontend` |
 | Framework Preset | `Vite` |
 | Install Command | `npm ci` |
 | Build Command | `npm run build` |
 | Output Directory | `dist` |
 | Node.js Version | `22.x` |
-| Environment Variable | `VITE_API_BASE_URL=https://<railway-domain>/api/v1`，只勾选 Preview |
+| Preview Variable | `VITE_API_BASE_URL=https://<railway-domain>/api/v1` |
 
-`frontend/vercel.json` 已包含 SPA fallback 和基础安全响应头。`VITE_*` 会进入浏览器产物，绝对不能放 API Key、数据库地址或其他秘密。
+`frontend/vercel.json` 提供 SPA fallback、CSP 和基础安全响应头。`VITE_API_BASE_URL` 是唯一需要的浏览器构建变量；不要创建任何包含访问码或服务端秘密的 `VITE_*` 变量。
 
-第一次 Vercel Preview 生成后：
+Vercel 真实 Preview URL 生成后，把其完整 origin 加入 Railway `CORS_ALLOWED_ORIGINS` 并重新部署后端。浏览器终验应覆盖：访问页、错误码提示、正确码进入、刷新仍在当前会话、业务请求带 Authorization、模拟 401 自动返回访问页、退出按钮清凭证、关闭标签页后凭证消失。
 
-1. 复制其真实 origin，例如 `https://<actual-preview>.vercel.app`，不要猜地址。
-2. 将这个 origin 填入 Railway 的 `CORS_ALLOWED_ORIGINS`，不带路径、不用 `*`。
-3. 重新部署 Railway staging。
-4. 打开 Vercel Preview，在浏览器 Network 中确认 `/health` 与 `/workflow` 请求均成功，且响应的 `Access-Control-Allow-Origin` 精确等于当前 Preview origin。
-5. 每个新的随机 Preview 地址都需要加入 allowlist；也可以只维护一个明确的测试 Preview 地址。
+## 5. 持久化边界
 
-## 5. 持久化与数据风险
-
-| 数据 | 目标路径 | 风险与处理 |
+| 数据 | 路径 | 重置策略 |
 | --- | --- | --- |
-| SQLite 业务状态 | `/data/tradepilot.db` | 必须持久化；保持单副本。Volume 丢失即丢失产品、运行与报告元数据。 |
-| Chroma 索引 | `/data/chroma` | 可重建但成本高；持久化，且不要让多个实例同时写。 |
-| 上传文件 | `/data/uploads` | 业务输入，必须持久化并备份。 |
-| 报告文件 | `/data/reports` | 业务输出，必须持久化并备份。 |
-| Peer cache | `/data/peer-cache` | 派生数据，可重建但源文件很大，建议持久化。 |
-| RAG manifest | `/data/index-manifest.sqlite` | 派生状态，建议和 Chroma 一起持久化。 |
-| Tariff SQLite | `/data/tariff-rules.sqlite` | 派生规则库，建议持久化。 |
+| SQLite 业务状态 | `/data/tradepilot.db` | 备份后按表清理；不删数据库文件、不降级 Alembic |
+| Chroma / 公共 RAG | `/data/chroma` | 保留；需要时通过显式知识库流程重建 |
+| 上传文件 | `/data/uploads` | 演示重置会备份后清空目录内容，保留目录和 Volume |
+| 报告文件 | `/data/reports` | 演示重置会备份后清空目录内容 |
+| 演示备份 | `/data/backups` | 保留；不要放入 uploads/reports 内 |
+| Peer cache / manifest | `/data/peer-cache`、`/data/index-manifest.sqlite` | 保留 |
+| Tariff 数据 | `/data/tariff-rules.sqlite` | 保留 |
 
-Railway Volume 会跨重启和重新部署保留，但删除/Wipe Volume 会清空数据。带 Volume 的 Service 重新部署时可能有短暂停机。测试阶段也应在重要数据写入后创建 Volume backup。
+两个 Git LFS 数据文件体积较大。只有确认 Railway 容器中不是 LFS pointer，并完成索引和模型供应商验证后，才可开放真实分析。Volume 在 build/pre-deploy 阶段不可用，数据准备必须在已挂载 Volume 的运行环境中显式执行。
 
-如果确认 Git LFS 文件在运行容器中是完整 JSONL，而不是几行 LFS pointer，才可在运行环境中准备真实数据：
+## 6. 演示数据备份、重置和恢复
+
+先停止成员操作并确认没有 pending/running 分析。所有 reset 命令默认 dry-run：
 
 ```powershell
-python scripts/prepare_peer_data.py --cache-dir /data/peer-cache
-python scripts/import_us_hts_tariffs.py --input data/raw/us_hts_2026_rev11.csv --database-output /data/tariff-rules.sqlite --normalized-output /data/us-hts-tariffs.jsonl
+python scripts/manage_demo_data.py plan
+python scripts/manage_demo_data.py export
+python scripts/manage_demo_data.py reset
+python scripts/manage_demo_data.py reset --confirm RESET_SHARED_DEMO_DATA
+python scripts/seed_demo.py --profile generic_cross_border_demo
 ```
 
-Volume 在 build/pre-deploy 阶段不可用，因此这些命令只能在已挂载 Volume 的运行环境中执行。未验证 LFS、索引、模型供应商和访问控制前，不要把 `DEFAULT_DATA_MODE` 改为 `real`。
+确认 reset 会先创建 SQLite 在线备份，并复制 upload/report 文件到 `DEMO_BACKUP_DIR/<UTC timestamp>`，随后删除：所有运行、阶段、事件、Agent 输出、证据引用、报告、Conversation/Message、ProductFile，以及 `data_origin=user` 的商品与其商品级 offers/reviews/knowledge。最后清空配置的 uploads/reports 目录内容。
 
-## 6. 回滚与重新部署
+不会删除：`real`/`demo` 基础商品及其知识、公共知识库、Chroma、peer cache、manifest、tariff 数据、Alembic schema、环境变量、部署配置或 Railway Volume。存在活跃分析时确认 reset 会拒绝执行。预置案例恢复使用现有幂等 `seed_demo.py`；恢复整个共享记录则应从备份在维护窗口中人工恢复，而不是删除 Volume。
 
-- 代码回滚：对本次独立提交执行 `git revert <commit>`，推送 staging 分支后重新部署；不要改写共享分支历史。
-- Railway：选择上一个成功 Deployment 重新部署。Volume 数据会保留，但代码回滚不会自动回滚数据库 schema；当前启动只执行 Alembic `upgrade head`，禁止自动降级或删除数据库。
-- Vercel：保留 Preview 历史，重新部署上一个成功 commit；不要 Promote to Production。
-- 环境变量改变后必须重新部署对应平台。Vercel URL 改变时要同步 Railway CORS allowlist。
-- 任何时候都不要通过删除 Volume 来“回滚”；先备份，再单独制定数据恢复方案。
+## 7. 回滚
 
-## 7. 安全检查清单
+- 代码回滚：`git revert <this-commit>` 后推送 staging 分支；不要改写共享历史。
+- Railway：重新部署上一个成功 commit。代码回滚不会自动降级 schema，也不会删除 Volume 数据。
+- Vercel：重新部署上一个成功 Preview；不要 Promote to Production。
+- 数据回滚：先保留当前 `/data` 快照，再从 `DEMO_BACKUP_DIR` 中选择明确备份恢复 SQLite、uploads 和 reports。不要在运行中的 worker 写数据库时覆盖文件。
 
-- [ ] `.env` 没有被 Git 跟踪，提交差异中没有真实密钥。
-- [ ] Vercel 只有 `VITE_API_BASE_URL`，没有任何服务端 Secret。
-- [ ] Railway Secret 只存在平台变量中，不在日志和代码中。
-- [ ] `APP_DEBUG=false`、单副本、`/data` Volume 已挂载。
-- [ ] `TRUSTED_HOSTS` 包含 `healthcheck.railway.app` 和实际 Railway 域名模式。
-- [ ] `CORS_ALLOWED_ORIGINS` 只包含已验证的 Vercel Preview origin。
-- [ ] API 无认证这一限制已被接受，或在加入模型 Secret/真实数据前另行实现访问控制。
-- [ ] 未绑定自定义域名，未将 Preview/staging 标记为正式生产。
+## 8. 上线前检查
 
-## 8. 当前未生成的地址
+- [ ] `.env` 与 `.env.*` 被 Git 忽略，只有 example 模板被跟踪；diff 中无真实密钥。
+- [ ] Railway 已设置非空 `APP_API_KEY`，Vercel 没有访问码变量。
+- [ ] `APP_DEBUG=false`、Replica=1、`RUN_WORKER_COUNT=1`，Volume 挂载到 `/data`。
+- [ ] health 匿名 200；核心 API 未认证/错误码为 401；正确码为 200；staging OpenAPI 为 404。
+- [ ] CORS 只包含实际 Preview origin，Trusted Hosts 与真实 Railway host 匹配。
+- [ ] 前端 401 自动退出和手动退出均已验证，控制台和错误 UI 不显示访问码。
+- [ ] 已接受单一共享工作区的数据可见性和互相覆盖风险。
+- [ ] 未绑定自定义域名，未创建或提升正式生产部署。
 
 在平台账号授权和实际部署完成前，前端 Preview URL 与后端 Railway URL 均为“未生成”。占位符不是可访问地址，也不得作为部署成功证据。
