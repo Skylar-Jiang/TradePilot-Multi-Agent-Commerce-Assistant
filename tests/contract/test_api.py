@@ -18,6 +18,67 @@ def make_client(tmp_path: Path) -> TestClient:
     return TestClient(create_app(settings))
 
 
+def test_configured_cors_allows_only_the_preview_origin(tmp_path: Path) -> None:
+    settings = Settings(
+        _env_file=None,
+        database_url=f"sqlite:///{tmp_path / 'cors.db'}",
+        report_dir=tmp_path / "reports",
+        upload_dir=tmp_path / "uploads",
+        chroma_dir=tmp_path / "chroma",
+        cors_allowed_origins="https://tradepilot-preview.vercel.app",
+    )
+
+    with TestClient(create_app(settings)) as client:
+        allowed = client.get(
+            "/api/v1/health",
+            headers={"Origin": "https://tradepilot-preview.vercel.app"},
+        )
+        denied = client.get(
+            "/api/v1/health",
+            headers={"Origin": "https://untrusted.example"},
+        )
+        preflight = client.options(
+            "/api/v1/products",
+            headers={
+                "Origin": "https://tradepilot-preview.vercel.app",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type",
+            },
+        )
+
+    assert allowed.status_code == 200
+    assert allowed.headers["access-control-allow-origin"] == "https://tradepilot-preview.vercel.app"
+    assert "access-control-allow-credentials" not in allowed.headers
+    assert "access-control-allow-origin" not in denied.headers
+    assert preflight.status_code == 200
+    assert "POST" in preflight.headers["access-control-allow-methods"]
+    assert "Content-Type" in preflight.headers["access-control-allow-headers"]
+
+
+def test_configured_trusted_hosts_reject_an_unknown_host(tmp_path: Path) -> None:
+    settings = Settings(
+        _env_file=None,
+        database_url=f"sqlite:///{tmp_path / 'hosts.db'}",
+        report_dir=tmp_path / "reports",
+        upload_dir=tmp_path / "uploads",
+        chroma_dir=tmp_path / "chroma",
+        trusted_hosts="tradepilot-staging.up.railway.app,healthcheck.railway.app",
+    )
+
+    with TestClient(create_app(settings)) as client:
+        allowed = client.get(
+            "/api/v1/health",
+            headers={"Host": "tradepilot-staging.up.railway.app"},
+        )
+        denied = client.get(
+            "/api/v1/health",
+            headers={"Host": "untrusted.example"},
+        )
+
+    assert allowed.status_code == 200
+    assert denied.status_code == 400
+
+
 def test_demo_api_flow_uses_unified_envelopes(tmp_path: Path) -> None:
     with make_client(tmp_path) as client:
         health = client.get("/api/v1/health")

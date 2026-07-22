@@ -5,8 +5,10 @@ from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.responses import failure
 from app.api.v1.router import router
@@ -94,6 +96,16 @@ def create_app(
         ),
         lifespan=lifespan,
     )
+    if resolved.cors_origins:
+        application.add_middleware(
+            CORSMiddleware,
+            allow_origins=resolved.cors_origins,
+            allow_credentials=False,
+            allow_methods=["GET", "POST", "OPTIONS"],
+            allow_headers=["Accept", "Content-Type", "Last-Event-ID", "X-Request-ID"],
+        )
+    if resolved.allowed_hosts:
+        application.add_middleware(TrustedHostMiddleware, allowed_hosts=resolved.allowed_hosts)
 
     @application.middleware("http")
     async def request_id_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]

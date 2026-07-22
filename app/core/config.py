@@ -2,8 +2,9 @@ import os
 import re
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlsplit
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _ENVIRONMENT_NAME = re.compile(r"^[a-z0-9_-]+$")
@@ -22,6 +23,8 @@ class Settings(BaseSettings):
     app_name: str = "TradePilot"
     app_version: str = "0.1.0"
     app_api_key: str | None = None
+    cors_allowed_origins: str = ""
+    trusted_hosts: str = ""
 
     database_url: str = "sqlite:///data/tradepilot.db"
     chroma_dir: Path = Path("data/chroma")
@@ -93,6 +96,38 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     default_data_mode: str = Field(default="demo")
 
+    @field_validator("cors_allowed_origins")
+    @classmethod
+    def validate_cors_allowed_origins(cls, value: str) -> str:
+        for origin in _split_comma_separated(value):
+            if origin == "*":
+                raise ValueError("CORS_ALLOWED_ORIGINS must not contain an unrestricted wildcard")
+            parsed = urlsplit(origin)
+            if (
+                parsed.scheme not in {"http", "https"}
+                or not parsed.netloc
+                or parsed.path not in {"", "/"}
+                or parsed.query
+                or parsed.fragment
+            ):
+                raise ValueError("CORS_ALLOWED_ORIGINS entries must be HTTP(S) origins without paths")
+        return value
+
+    @field_validator("trusted_hosts")
+    @classmethod
+    def validate_trusted_hosts(cls, value: str) -> str:
+        if "*" in _split_comma_separated(value):
+            raise ValueError("TRUSTED_HOSTS must not contain an unrestricted wildcard")
+        return value
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [origin.removesuffix("/") for origin in _split_comma_separated(self.cors_allowed_origins)]
+
+    @property
+    def allowed_hosts(self) -> list[str]:
+        return _split_comma_separated(self.trusted_hosts)
+
     @property
     def real_model_configured(self) -> bool:
         provider_models = bool(
@@ -112,6 +147,10 @@ def environment_dotenv_files() -> tuple[Path, Path]:
     if not _ENVIRONMENT_NAME.fullmatch(normalized):
         raise ValueError("APP_ENV must contain only lowercase letters, digits, '_' or '-'")
     return Path(".env"), Path(f".env.{normalized}")
+
+
+def _split_comma_separated(value: str) -> list[str]:
+    return [item.strip() for item in value.split(",") if item.strip()]
 
 
 def _read_dotenv_value(path: Path, key: str) -> str | None:
