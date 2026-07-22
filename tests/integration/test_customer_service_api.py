@@ -52,6 +52,9 @@ def test_customer_service_explain_returns_same_report_and_history(tmp_path) -> N
     assert payload["action_taken"] == "explain"
     assert payload["report_id"] == report_id
     assert payload["changed_section_ids"] == []
+    assert "第 1 版报告" in payload["reply"]
+    assert "可追溯证据" in payload["reply"]
+    assert "Report version" not in payload["reply"]
     assert conversation.status_code == 200
     assert conversation.json()["data"]["personality"] == "simple"
     assert [item["role"] for item in conversation.json()["data"]["messages"]] == ["user", "assistant"]

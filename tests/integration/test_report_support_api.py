@@ -86,7 +86,9 @@ def test_report_support_explains_with_section_evidence_limitations_and_history(t
     assert payload["section_id"] == "executive-summary"
     assert isinstance(payload["evidence_ids"], list)
     assert isinstance(payload["limitations"], list)
-    assert "version 1" in payload["response"]
+    assert "第 1 版报告" in payload["response"]
+    assert "可追溯证据" in payload["response"]
+    assert "没有修改报告内容" in payload["response"]
     assert conversation.status_code == 200
     assert [item["role"] for item in conversation.json()["data"]["messages"]] == [
         "user",
