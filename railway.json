@@ -1,7 +1,8 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
-    "builder": "RAILPACK"
+    "builder": "RAILPACK",
+    "buildCommand": "python scripts/materialize_lfs_data.py"
   },
   "deploy": {
     "startCommand": "python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT",

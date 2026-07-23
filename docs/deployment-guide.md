@@ -27,7 +27,7 @@
 
 1. 新建 Railway Project 和 `staging` Environment，从 GitHub 导入当前分支。
 2. Service Root Directory 留空（仓库根），Config as Code 使用 `/railway.json`。
-3. Builder 为 Railpack；启动命令为 `python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT`；健康检查为 `/api/v1/health`。
+3. Builder 为 Railpack；`railway.json` 的 build command 会实体化并校验两个 Git LFS 数据文件；启动命令为 `python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT`；健康检查为 `/api/v1/health`。
 4. Replica 数量固定为 `1`。SQLite、Chroma 和进程内准入锁均不支持这个阶段的多副本语义。
 5. 创建一个 Railway Volume，Mount Path 精确填写 `/data`。不要删除或 Wipe Volume 来重置演示数据。
 6. 在 Variables 中填写下表。不要手工设置 `PORT`。
@@ -110,6 +110,19 @@ PY
 ```
 
 两个源文件必须 `exists=True`、size 大于 LFS pointer 大小且 `lfs_pointer=False`。若仍是 pointer，应先让部署构建取得 Git LFS 实体；不要用 pointer 构建 cache。随后在同一个已挂载 Volume 的运行环境中显式准备可复用 cache：
+
+Railpack 源码快照可能只包含 LFS pointer，因此构建阶段执行 `python scripts/materialize_lfs_data.py`。脚本使用 Railway GitHub trigger 自动提供的 `RAILWAY_GIT_REPO_OWNER`、`RAILWAY_GIT_REPO_NAME` 和 `RAILWAY_GIT_COMMIT_SHA`，从对应 commit 的 GitHub media URL 流式下载，按 pointer 中的 size 和 SHA-256 校验后才原子替换文件。日志只打印相对路径，不打印变量或下载 URL。成功构建应出现：
+
+```text
+Materialized and verified Git LFS data: data/filtered/meta_pet_supplies_prefiltered.jsonl
+Materialized and verified Git LFS data: data/filtered/pet_supplies_reviews_prefiltered.jsonl
+```
+
+两个对象合计约 933MB。首次构建或 Railpack 缓存未命中时会增加构建耗时并消耗 GitHub LFS bandwidth；如果 GitHub LFS quota 不足，构建会校验失败并停止，不会把 pointer 或不完整文件部署为真实数据。该步骤只修改构建镜像中的源码文件，不读取、不删除也不覆盖 `/data` Volume。
+
+若部署不是由 GitHub trigger 触发而源码仍包含 pointer，构建会明确报告缺少 Railway Git 变量。此时不要填入 API Key；应恢复 GitHub branch 自动部署，或在 GitHub 仓库 Settings → Archives 启用包含 LFS objects 后重新部署。
+
+构建完成后仍需执行下面的 Volume cache 准备命令：
 
 ```bash
 python scripts/prepare_peer_data.py \

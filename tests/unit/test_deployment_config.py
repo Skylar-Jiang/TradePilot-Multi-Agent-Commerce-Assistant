@@ -11,7 +11,10 @@ def load_json(relative_path: str) -> dict[str, object]:
 def test_railway_runs_uvicorn_on_the_platform_port_with_healthcheck() -> None:
     config = load_json("railway.json")
 
-    assert config["build"] == {"builder": "RAILPACK"}
+    assert config["build"] == {
+        "builder": "RAILPACK",
+        "buildCommand": "python scripts/materialize_lfs_data.py",
+    }
     deploy = config["deploy"]
     assert deploy["startCommand"] == (
         "python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT"
