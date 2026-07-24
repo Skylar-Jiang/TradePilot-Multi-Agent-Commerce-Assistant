@@ -512,7 +512,15 @@ function WorkspaceApp({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const assistantFloatRef = useRef<HTMLDivElement | null>(null)
-  const assistantDragRef = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null)
+  const assistantFloatPositionRef = useRef<{ x: number; y: number } | null>(null)
+  const assistantDragRef = useRef<{
+    pointerId: number
+    originX: number
+    originY: number
+    startClientX: number
+    startClientY: number
+    handle: HTMLElement
+  } | null>(null)
 
   const startPageTransition = useCallback((nextPage: PageKey) => {
     const currentPage = pageRef.current
@@ -562,12 +570,43 @@ function WorkspaceApp({
   }, [sidebarCollapsed])
 
   useEffect(() => {
+    assistantFloatPositionRef.current = assistantFloatPosition
+  }, [assistantFloatPosition])
+
+  const applyAssistantFloatPosition = useCallback((position: { x: number; y: number }) => {
+    const panel = assistantFloatRef.current
+    if (panel) {
+      panel.style.left = `${position.x}px`
+      panel.style.top = `${position.y}px`
+      panel.style.right = 'auto'
+    }
+    assistantFloatPositionRef.current = position
+  }, [])
+
+  useEffect(() => {
     if (page !== 'audit' && assistantOpen) setAssistantOpen(false)
   }, [assistantOpen, page])
 
   useEffect(() => {
+    if (!assistantOpen || assistantFloatPosition || window.innerWidth <= 720) return
+    const panel = assistantFloatRef.current
+    if (!panel) return
+    const frame = window.requestAnimationFrame(() => {
+      const panelWidth = panel.offsetWidth || 430
+      const initialPosition = {
+        x: Math.max(24, window.innerWidth - panelWidth - 220),
+        y: 108,
+      }
+      applyAssistantFloatPosition(initialPosition)
+      setAssistantFloatPosition(initialPosition)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [assistantOpen, assistantFloatPosition, applyAssistantFloatPosition])
+
+  useEffect(() => {
     if (!assistantOpen) {
       assistantDragRef.current = null
+      document.body.classList.remove('assistant-dragging')
       return
     }
 
@@ -575,42 +614,69 @@ function WorkspaceApp({
       const dragState = assistantDragRef.current
       if (!dragState || dragState.pointerId !== event.pointerId) return
 
+      event.preventDefault()
       const panelWidth = assistantFloatRef.current?.offsetWidth ?? 430
       const panelHeight = assistantFloatRef.current?.offsetHeight ?? 640
-      const nextX = Math.min(Math.max(12, event.clientX - dragState.offsetX), Math.max(12, window.innerWidth - panelWidth - 12))
-      const nextY = Math.min(Math.max(12, event.clientY - dragState.offsetY), Math.max(12, window.innerHeight - panelHeight - 12))
-      setAssistantFloatPosition({ x: nextX, y: nextY })
+      const deltaX = event.clientX - dragState.startClientX
+      const deltaY = event.clientY - dragState.startClientY
+      const nextX = Math.min(Math.max(24, dragState.originX + deltaX), Math.max(24, window.innerWidth - panelWidth - 24))
+      const nextY = Math.min(Math.max(24, dragState.originY + deltaY), Math.max(24, window.innerHeight - panelHeight - 24))
+      const currentPosition = assistantFloatPositionRef.current
+      if (currentPosition && currentPosition.x === nextX && currentPosition.y === nextY) return
+      applyAssistantFloatPosition({ x: nextX, y: nextY })
     }
 
-    const stopDragging = (event: PointerEvent) => {
-      if (assistantDragRef.current?.pointerId === event.pointerId) assistantDragRef.current = null
+    const stopDragging = (pointerId?: number) => {
+      const dragState = assistantDragRef.current
+      if (!dragState || (pointerId !== undefined && dragState.pointerId !== pointerId)) return
+      if (assistantFloatPositionRef.current) {
+        setAssistantFloatPosition(assistantFloatPositionRef.current)
+      }
+      if (dragState.handle.hasPointerCapture(dragState.pointerId)) {
+        dragState.handle.releasePointerCapture(dragState.pointerId)
+      }
+      assistantDragRef.current = null
+      document.body.classList.remove('assistant-dragging')
     }
+
+    const handlePointerUp = (event: PointerEvent) => stopDragging(event.pointerId)
+    const handlePointerCancel = (event: PointerEvent) => stopDragging(event.pointerId)
+    const handleWindowBlur = () => stopDragging()
 
     window.addEventListener('pointermove', handlePointerMove)
-    window.addEventListener('pointerup', stopDragging)
-    window.addEventListener('pointercancel', stopDragging)
+    window.addEventListener('pointerup', handlePointerUp)
+    window.addEventListener('pointercancel', handlePointerCancel)
+    window.addEventListener('blur', handleWindowBlur)
 
     return () => {
+      stopDragging()
       window.removeEventListener('pointermove', handlePointerMove)
-      window.removeEventListener('pointerup', stopDragging)
-      window.removeEventListener('pointercancel', stopDragging)
+      window.removeEventListener('pointerup', handlePointerUp)
+      window.removeEventListener('pointercancel', handlePointerCancel)
+      window.removeEventListener('blur', handleWindowBlur)
     }
   }, [assistantOpen])
 
   const handleAssistantFloatDragStart = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    if (window.innerWidth <= 720) return
+    if (window.innerWidth <= 720 || !event.isPrimary || event.button !== 0) return
     const panel = assistantFloatRef.current
     if (!panel) return
     event.preventDefault()
-    event.currentTarget.setPointerCapture(event.pointerId)
-    const rect = panel.getBoundingClientRect()
+    const handle = event.currentTarget
+    handle.setPointerCapture(event.pointerId)
+    const panelRect = panel.getBoundingClientRect()
     assistantDragRef.current = {
       pointerId: event.pointerId,
-      offsetX: event.clientX - rect.left,
-      offsetY: event.clientY - rect.top,
+      originX: panelRect.left,
+      originY: panelRect.top,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      handle,
     }
-    setAssistantFloatPosition((current) => current ?? { x: rect.left, y: rect.top })
-  }, [])
+    document.body.classList.add('assistant-dragging')
+    applyAssistantFloatPosition(assistantFloatPositionRef.current ?? { x: panelRect.left, y: panelRect.top })
+    setAssistantFloatPosition((current) => current ?? { x: panelRect.left, y: panelRect.top })
+  }, [applyAssistantFloatPosition])
 
   useEffect(() => {
     let active = true
@@ -974,7 +1040,6 @@ function WorkspaceApp({
               value={form.category}
               options={productCategoryOptions}
               placeholder="搜索或输入商品类别"
-              helperText="选择常用品类，或输入自定义类别"
               icon={<Package weight="duotone" />}
               onChange={(category) => setForm((current) => ({ ...current, category }))}
             />
@@ -1462,12 +1527,11 @@ function WorkspaceApp({
 
   const renderHistoryAgentPanel = (floating = false) => (
     <aside className="history-agent-panel glass-panel" aria-labelledby="history-agent-title">
-      <header
-        className={`history-panel-heading agent-heading${floating ? ' draggable' : ''}`}
-        onPointerDown={floating ? handleAssistantFloatDragStart : undefined}
-      >
-        <span><Robot weight="duotone" /></span>
-        <div><h2 id="history-agent-title">报告修改助手</h2><p>提出修改要求后，系统会保留原文并生成新版本。</p></div>
+      <header className="history-panel-heading agent-heading">
+        <div className="assistant-panel-heading-copy">
+          <span><Robot weight="duotone" /></span>
+          <div><h2 id="history-agent-title">报告修改助手</h2><p>提出修改要求后，系统会保留原文并生成新版本。</p></div>
+        </div>
       </header>
 
       {!report ? (
@@ -1516,6 +1580,14 @@ function WorkspaceApp({
         aria-labelledby="history-agent-title"
         style={assistantFloatPosition ? { left: `${assistantFloatPosition.x}px`, top: `${assistantFloatPosition.y}px`, right: 'auto' } : undefined}
       >
+        <button
+          className="history-assistant-drag-button"
+          type="button"
+          aria-label="拖拽客服悬浮窗"
+          onPointerDown={handleAssistantFloatDragStart}
+        >
+          <SidebarSimple weight="bold" />
+        </button>
         <button className="icon-button history-assistant-close" aria-label="关闭报告修改助手" onClick={() => setAssistantOpen(false)}><X weight="bold" /></button>
         {renderHistoryAgentPanel(true)}
       </div>
