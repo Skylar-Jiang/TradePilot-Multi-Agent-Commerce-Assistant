@@ -14,7 +14,9 @@ import {
   Compass,
   CurrencyDollar,
   Database,
+  DownloadSimple,
   FileText,
+  FilePdf,
   Fingerprint,
   Globe,
   Headset,
@@ -72,6 +74,7 @@ import {
   saveSharedAccessCode,
 } from './auth'
 import { productCategoryOptions, targetMarketOptions } from './catalogOptions'
+import { downloadMarkdownReport } from './reportExport'
 
 type PageKey = 'workspace' | 'agents' | 'decision' | 'audit'
 type DecisionSection = 'strategy' | 'report'
@@ -568,6 +571,15 @@ function WorkspaceApp({
   useEffect(() => {
     localStorage.setItem('tradepilot-sidebar-collapsed', String(sidebarCollapsed))
   }, [sidebarCollapsed])
+
+  useEffect(() => {
+    const clearPrintTarget = () => delete document.body.dataset.reportExport
+    window.addEventListener('afterprint', clearPrintTarget)
+    return () => {
+      window.removeEventListener('afterprint', clearPrintTarget)
+      clearPrintTarget()
+    }
+  }, [])
 
   useEffect(() => {
     assistantFloatPositionRef.current = assistantFloatPosition
@@ -1479,12 +1491,25 @@ function WorkspaceApp({
     </>
   )
 
+  const renderReportExportActions = (printTarget: 'report' | 'history') => {
+    if (!markdown) return null
+    const reportId = report?.report_id ?? selectedVersionReportId ?? ''
+
+    return <div className="report-export-actions" aria-label="报告导出">
+      <button type="button" onClick={() => downloadMarkdownReport(markdown, reportId)}><DownloadSimple weight="bold" /><span>下载 MD</span></button>
+      <button type="button" onClick={() => {
+        document.body.dataset.reportExport = printTarget
+        window.requestAnimationFrame(() => window.print())
+      }}><FilePdf weight="bold" /><span>导出 PDF</span></button>
+    </div>
+  }
+
   const renderReport = () => (
     <div className="page-view page-report">
       <PageHeader
         title="上市分析报告"
         description="四个 Agent 完成协作与审校后，系统在这里呈现可继续编辑和交付的 Markdown 报告。"
-        action={<div className="report-header-actions">{report && <span className={`status-pill status-${report.audit_status}`}>{statusIcon(report.audit_status)}版本 {report.version} · {statusText(report.audit_status)}</span>}<button className="assistant-launch-button" onClick={() => setAssistantOpen(true)}><Headset weight="duotone" /><span><strong>客服 AI</strong><small>{report ? '解释或增量修改报告' : '报告生成后可用'}</small></span></button></div>}
+        action={<div className="report-header-actions">{report && <span className={`status-pill status-${report.audit_status}`}>{statusIcon(report.audit_status)}版本 {report.version} · {statusText(report.audit_status)}</span>}{renderReportExportActions('report')}<button className="assistant-launch-button" onClick={() => setAssistantOpen(true)}><Headset weight="duotone" /><span><strong>客服 AI</strong><small>{report ? '解释或增量修改报告' : '报告生成后可用'}</small></span></button></div>}
       />
       {markdown ? (
         <section className="report-shell glass-panel">
@@ -1635,6 +1660,7 @@ function WorkspaceApp({
             <span><FileText weight="duotone" /></span>
             <div><h2 id="history-document-title">{activeHistoryItem?.product_name || '文档预览'}</h2><p>{activeHistoryItem ? `${activeHistoryItem.product_category || '未分类'} · ${activeHistoryItem.version_count} 个历史版本` : '选择左侧记录查看生成文档。'}</p></div>
             {report && <span className={`status-pill status-${report.audit_status}`}>{statusIcon(report.audit_status)}{statusText(report.audit_status)}</span>}
+            {renderReportExportActions('history')}
           </header>
 
           {!!historyVersions.length && <nav className="history-version-strip" aria-label="报告版本">
