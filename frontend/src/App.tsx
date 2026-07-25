@@ -1040,6 +1040,7 @@ function WorkspaceApp({
               value={form.category}
               options={productCategoryOptions}
               placeholder="搜索或输入商品类别"
+              helperText="选择常用品类，或输入自定义商品类别"
               icon={<Package weight="duotone" />}
               onChange={(category) => setForm((current) => ({ ...current, category }))}
             />
@@ -1525,7 +1526,7 @@ function WorkspaceApp({
     </div>
   )
 
-  const renderHistoryAgentPanel = (floating = false) => (
+  const renderHistoryAgentPanel = () => (
     <aside className="history-agent-panel glass-panel" aria-labelledby="history-agent-title">
       <header className="history-panel-heading agent-heading">
         <div className="assistant-panel-heading-copy">
@@ -1589,7 +1590,7 @@ function WorkspaceApp({
           <SidebarSimple weight="bold" />
         </button>
         <button className="icon-button history-assistant-close" aria-label="关闭报告修改助手" onClick={() => setAssistantOpen(false)}><X weight="bold" /></button>
-        {renderHistoryAgentPanel(true)}
+        {renderHistoryAgentPanel()}
       </div>
     </>
   )
