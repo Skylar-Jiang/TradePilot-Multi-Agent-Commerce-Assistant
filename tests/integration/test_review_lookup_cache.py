@@ -1,7 +1,11 @@
 import json
+import os
 import sqlite3
 from pathlib import Path
 
+import pytest
+
+from app.core.exceptions import DataPreparationRequiredError
 from app.domain.review_lookup import ReviewLookup
 
 
@@ -61,3 +65,38 @@ def test_review_lookup_rebuilds_when_source_changes_and_caps_total_rows(tmp_path
     assert rebuilt.review_count == 3
     assert len(rows) == 2
     assert [row.source_row for row in rows] == [1, 2]
+
+
+def test_review_lookup_remains_prepared_when_only_source_mtime_changes(tmp_path: Path) -> None:
+    source = tmp_path / "reviews.jsonl"
+    cache_path = tmp_path / "review_lookup.sqlite"
+    _write_jsonl(source, [_review("P1", 1)])
+    ReviewLookup.build(source, cache_path)
+
+    stat = source.stat()
+    os.utime(source, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000_000))
+
+    prepared = ReviewLookup.open_prepared(source, cache_path)
+
+    assert prepared.rebuilt is False
+    assert prepared.review_count == 1
+
+
+def test_review_lookup_requires_preparation_when_cache_is_missing(tmp_path: Path) -> None:
+    source = tmp_path / "reviews.jsonl"
+    _write_jsonl(source, [_review("P1", 1)])
+
+    with pytest.raises(DataPreparationRequiredError, match="review lookup cache is missing"):
+        ReviewLookup.open_prepared(source, tmp_path / "review_lookup.sqlite")
+
+
+def test_review_lookup_is_stale_when_same_size_source_content_changes(tmp_path: Path) -> None:
+    source = tmp_path / "reviews.jsonl"
+    cache_path = tmp_path / "review_lookup.sqlite"
+    _write_jsonl(source, [_review("P1", 1)])
+    ReviewLookup.build(source, cache_path)
+
+    source.write_bytes(source.read_bytes().replace(b"Original", b"original", 1))
+
+    with pytest.raises(DataPreparationRequiredError, match="review lookup cache is stale"):
+        ReviewLookup.open_prepared(source, cache_path)

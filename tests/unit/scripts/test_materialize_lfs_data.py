@@ -1,4 +1,5 @@
 import hashlib
+import json
 from io import BytesIO
 from pathlib import Path
 
@@ -58,6 +59,10 @@ def test_materialize_file_downloads_and_verifies_the_exact_lfs_object(tmp_path: 
         )
     ]
     assert not path.with_name("data.jsonl.lfs-download").exists()
+    assert json.loads(path.with_name("data.jsonl.source-identity.json").read_text(encoding="utf-8")) == {
+        "sha256": hashlib.sha256(content).hexdigest(),
+        "size": len(content),
+    }
 
 
 def test_materialize_file_rejects_content_that_does_not_match_pointer(tmp_path: Path) -> None:

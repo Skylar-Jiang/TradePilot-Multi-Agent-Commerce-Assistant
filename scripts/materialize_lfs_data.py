@@ -3,12 +3,21 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
 from urllib.parse import quote
 from urllib.request import Request, urlopen
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from app.domain.source_identity import (  # noqa: E402
+    remove_verified_content_identity,
+    write_verified_content_identity,
+)
 
 LFS_VERSION = "version https://git-lfs.github.com/spec/v1"
 LFS_FILES = (
@@ -57,6 +66,7 @@ def materialize_file(
     pointer = read_lfs_pointer(path)
     if pointer is None:
         return False
+    remove_verified_content_identity(path)
     parts = [repo_owner, repo_name, commit_sha, *repository_path.split("/")]
     url = "https://media.githubusercontent.com/media/" + "/".join(
         quote(part, safe="") for part in parts
@@ -77,6 +87,7 @@ def materialize_file(
                 f"expected size={pointer.size}, downloaded size={downloaded}"
             )
         temporary.replace(path)
+        write_verified_content_identity(path, sha256=pointer.sha256, size=pointer.size)
     except Exception:
         temporary.unlink(missing_ok=True)
         raise

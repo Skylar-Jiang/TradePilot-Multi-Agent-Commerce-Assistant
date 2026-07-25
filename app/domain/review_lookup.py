@@ -12,8 +12,9 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app.core.exceptions import DataPreparationRequiredError
+from app.domain.source_identity import source_content_sha256
 
-REVIEW_LOOKUP_SCHEMA_VERSION = 1
+REVIEW_LOOKUP_SCHEMA_VERSION = 2
 
 
 class IndexedReview(BaseModel):
@@ -143,13 +144,11 @@ class ReviewLookup:
 
 
 def _source_signature(path: Path) -> str:
-    stat = path.stat()
     payload = json.dumps(
         {
             "schema": REVIEW_LOOKUP_SCHEMA_VERSION,
             "path": str(path.resolve()),
-            "size": stat.st_size,
-            "mtime_ns": stat.st_mtime_ns,
+            "sha256": source_content_sha256(path),
         },
         sort_keys=True,
     )

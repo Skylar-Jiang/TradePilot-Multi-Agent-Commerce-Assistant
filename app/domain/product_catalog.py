@@ -18,8 +18,9 @@ from app.domain.peer_matching import (
     CatalogProduct,
     matching_tokens,
 )
+from app.domain.source_identity import source_content_sha256
 
-CATALOG_SCHEMA_VERSION = 2
+CATALOG_SCHEMA_VERSION = 3
 
 
 @dataclass(slots=True)
@@ -159,13 +160,11 @@ class ProductCatalog:
 
 
 def _source_signature(path: Path) -> str:
-    stat = path.stat()
     payload = json.dumps(
         {
             "schema": CATALOG_SCHEMA_VERSION,
             "path": str(path.resolve()),
-            "size": stat.st_size,
-            "mtime_ns": stat.st_mtime_ns,
+            "sha256": source_content_sha256(path),
         },
         sort_keys=True,
     )
