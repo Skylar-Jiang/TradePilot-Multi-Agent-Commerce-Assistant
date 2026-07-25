@@ -4613,8 +4613,9 @@ body.assistant-dragging * {
   --theme-border: rgba(212, 212, 216, 0.92);
   --theme-border-soft: rgba(212, 212, 216, 0.52);
   --theme-text: #18181b;
-  --theme-text-muted: #71717a;
-  --theme-text-soft: #a1a1aa;
+  --theme-text-muted: #5f606a;
+  --theme-text-soft: #797a85;
+  --theme-text-accent: #4c4c56;
   --theme-button: #3f3f46;
   --theme-button-strong: #27272a;
   --theme-button-text: #fafafa;
@@ -4629,7 +4630,7 @@ body.assistant-dragging * {
   --page-button: #3f3f46;
   --page-card: #ffffff;
   --page-text: #18181b;
-  --page-muted: #71717a;
+  --page-muted: #5f606a;
   --page-border: #e4e4e7;
   --page-on-button: #fafafa;
   --page-accent: #3f3f46;
@@ -4637,8 +4638,8 @@ body.assistant-dragging * {
   --page-accent-soft: rgba(82, 82, 91, 0.08);
   --ink: #18181b;
   --ink-strong: #18181b;
-  --ink-muted: #71717a;
-  --ink-faint: #a1a1aa;
+  --ink-muted: #5f606a;
+  --ink-faint: #797a85;
   --line: rgba(212, 212, 216, 0.18);
   --line-strong: rgba(161, 161, 170, 0.26);
   --panel-top: rgba(255, 255, 255, 0.96);
@@ -4670,8 +4671,9 @@ body.assistant-dragging * {
   --theme-border: rgba(238, 210, 220, 0.96);
   --theme-border-soft: rgba(238, 210, 220, 0.6);
   --theme-text: #2d1f25;
-  --theme-text-muted: #8a6d78;
-  --theme-text-soft: #b697a3;
+  --theme-text-muted: #714d5a;
+  --theme-text-soft: #946b7c;
+  --theme-text-accent: #7a455a;
   --theme-button: #9a6b7c;
   --theme-button-strong: #835566;
   --theme-button-text: #fffafb;
@@ -4686,7 +4688,7 @@ body.assistant-dragging * {
   --page-button: #9a6b7c;
   --page-card: #fffdfd;
   --page-text: #2d1f25;
-  --page-muted: #8a6d78;
+  --page-muted: #714d5a;
   --page-border: #efd9e1;
   --page-on-button: #fffafb;
   --page-accent: #9a6b7c;
@@ -4694,8 +4696,8 @@ body.assistant-dragging * {
   --page-accent-soft: rgba(154, 107, 124, 0.1);
   --ink: #2d1f25;
   --ink-strong: #2d1f25;
-  --ink-muted: #8a6d78;
-  --ink-faint: #b697a3;
+  --ink-muted: #714d5a;
+  --ink-faint: #946b7c;
   --line: rgba(238, 210, 220, 0.18);
   --line-strong: rgba(214, 169, 184, 0.26);
   --panel-top: rgba(255, 252, 253, 0.96);
@@ -4727,8 +4729,9 @@ body.assistant-dragging * {
   --theme-border: rgba(228, 214, 194, 0.96);
   --theme-border-soft: rgba(228, 214, 194, 0.6);
   --theme-text: #30261c;
-  --theme-text-muted: #887562;
-  --theme-text-soft: #b2a08d;
+  --theme-text-muted: #6e5740;
+  --theme-text-soft: #8d7359;
+  --theme-text-accent: #704f30;
   --theme-button: #876a4c;
   --theme-button-strong: #6e543b;
   --theme-button-text: #fffdf9;
@@ -4743,7 +4746,7 @@ body.assistant-dragging * {
   --page-button: #876a4c;
   --page-card: #fffdfa;
   --page-text: #30261c;
-  --page-muted: #887562;
+  --page-muted: #6e5740;
   --page-border: #e7dccd;
   --page-on-button: #fffdf9;
   --page-accent: #876a4c;
@@ -4751,8 +4754,8 @@ body.assistant-dragging * {
   --page-accent-soft: rgba(135, 106, 76, 0.1);
   --ink: #30261c;
   --ink-strong: #30261c;
-  --ink-muted: #887562;
-  --ink-faint: #b2a08d;
+  --ink-muted: #6e5740;
+  --ink-faint: #8d7359;
   --line: rgba(228, 214, 194, 0.2);
   --line-strong: rgba(199, 179, 153, 0.28);
   --panel-top: rgba(255, 253, 249, 0.96);
@@ -4784,8 +4787,9 @@ body.assistant-dragging * {
   --theme-border: rgba(72, 88, 118, 0.92);
   --theme-border-soft: rgba(98, 116, 150, 0.48);
   --theme-text: #edf3ff;
-  --theme-text-muted: #a7b5cf;
-  --theme-text-soft: #73819b;
+  --theme-text-muted: #c1cde2;
+  --theme-text-soft: #96a6c0;
+  --theme-text-accent: #bed0ee;
   --theme-button: #6d84ac;
   --theme-button-strong: #506583;
   --theme-button-text: #f8fbff;
@@ -4800,7 +4804,7 @@ body.assistant-dragging * {
   --page-button: #6d84ac;
   --page-card: #1b2434;
   --page-text: #edf3ff;
-  --page-muted: #a7b5cf;
+  --page-muted: #c1cde2;
   --page-border: #485876;
   --page-on-button: #f8fbff;
   --page-accent: #6d84ac;
@@ -4808,8 +4812,8 @@ body.assistant-dragging * {
   --page-accent-soft: rgba(109, 132, 172, 0.16);
   --ink: #edf3ff;
   --ink-strong: #edf3ff;
-  --ink-muted: #a7b5cf;
-  --ink-faint: #73819b;
+  --ink-muted: #c1cde2;
+  --ink-faint: #96a6c0;
   --line: rgba(98, 116, 150, 0.24);
   --line-strong: rgba(118, 142, 189, 0.34);
   --panel-top: rgba(26, 34, 50, 0.96);
@@ -5028,6 +5032,29 @@ body.assistant-dragging * {
 
 .app-shell:is(.skin-petal, .skin-linen) :is(.report-paper, .history-report-paper) {
   background: #ffffff;
+}
+
+/* Keep tariff data legible after the dark-theme palette is replaced. */
+.app-shell:is(.skin-snow, .skin-petal, .skin-linen, .skin-midnight) :is(
+  .tariff-metric strong,
+  .tariff-source-meta dd
+) {
+  color: var(--theme-text);
+}
+
+.app-shell:is(.skin-snow, .skin-petal, .skin-linen, .skin-midnight) :is(
+  .tariff-summary,
+  .impact-list p,
+  .tariff-evidence-list p
+) {
+  color: var(--theme-text-muted);
+}
+
+.app-shell:is(.skin-snow, .skin-petal, .skin-linen, .skin-midnight) :is(
+  .tariff-evidence-list code,
+  .tariff-placeholder code
+) {
+  color: var(--theme-text-accent);
 }
 
 /* App typography follows the original white theme across all four themes. */
