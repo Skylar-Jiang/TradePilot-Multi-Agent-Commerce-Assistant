@@ -74,6 +74,7 @@ import {
   saveSharedAccessCode,
 } from './auth'
 import { productCategoryOptions, targetMarketOptions } from './catalogOptions'
+import { clampAssistantFloatPosition, initialAssistantFloatPosition } from './assistantFloat'
 import { downloadMarkdownReport, printReportDocument } from './reportExport'
 
 type PageKey = 'workspace' | 'agents' | 'decision' | 'audit'
@@ -503,7 +504,7 @@ function WorkspaceApp({
   const [historyBusy, setHistoryBusy] = useState(false)
   const [historyError, setHistoryError] = useState('')
   const [archiveOpen, setArchiveOpen] = useState(false)
-  const [assistantOpen, setAssistantOpen] = useState(false)
+  const [assistantSurface, setAssistantSurface] = useState<'decision' | 'history' | null>(null)
   const [assistantFloatPosition, setAssistantFloatPosition] = useState<{ x: number; y: number } | null>(null)
   const [personality, setPersonality] = useState<CustomerServicePersonality>('professional')
   const [conversationId, setConversationId] = useState<string | null>(null)
@@ -578,36 +579,30 @@ function WorkspaceApp({
 
   const applyAssistantFloatPosition = useCallback((position: { x: number; y: number }) => {
     const panel = assistantFloatRef.current
+    const nextPosition = panel
+      ? clampAssistantFloatPosition({
+        ...position,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        panelWidth: panel.offsetWidth || 430,
+        panelHeight: panel.offsetHeight || 640,
+      })
+      : position
     if (panel) {
-      panel.style.left = `${position.x}px`
-      panel.style.top = `${position.y}px`
+      panel.style.left = `${nextPosition.x}px`
+      panel.style.top = `${nextPosition.y}px`
       panel.style.right = 'auto'
     }
-    assistantFloatPositionRef.current = position
+    assistantFloatPositionRef.current = nextPosition
   }, [])
 
   useEffect(() => {
-    if (page !== 'audit' && assistantOpen) setAssistantOpen(false)
-  }, [assistantOpen, page])
+    const expectedSurface = page === 'decision' ? 'decision' : page === 'audit' ? 'history' : null
+    if (assistantSurface && assistantSurface !== expectedSurface) setAssistantSurface(null)
+  }, [assistantSurface, page])
 
   useEffect(() => {
-    if (!assistantOpen || assistantFloatPosition || window.innerWidth <= 720) return
-    const panel = assistantFloatRef.current
-    if (!panel) return
-    const frame = window.requestAnimationFrame(() => {
-      const panelWidth = panel.offsetWidth || 430
-      const initialPosition = {
-        x: Math.max(24, window.innerWidth - panelWidth - 220),
-        y: 108,
-      }
-      applyAssistantFloatPosition(initialPosition)
-      setAssistantFloatPosition(initialPosition)
-    })
-    return () => window.cancelAnimationFrame(frame)
-  }, [assistantOpen, assistantFloatPosition, applyAssistantFloatPosition])
-
-  useEffect(() => {
-    if (!assistantOpen) {
+    if (assistantSurface !== 'history') {
       assistantDragRef.current = null
       document.body.classList.remove('assistant-dragging')
       return
@@ -618,12 +613,10 @@ function WorkspaceApp({
       if (!dragState || dragState.pointerId !== event.pointerId) return
 
       event.preventDefault()
-      const panelWidth = assistantFloatRef.current?.offsetWidth ?? 430
-      const panelHeight = assistantFloatRef.current?.offsetHeight ?? 640
       const deltaX = event.clientX - dragState.startClientX
       const deltaY = event.clientY - dragState.startClientY
-      const nextX = Math.min(Math.max(24, dragState.originX + deltaX), Math.max(24, window.innerWidth - panelWidth - 24))
-      const nextY = Math.min(Math.max(24, dragState.originY + deltaY), Math.max(24, window.innerHeight - panelHeight - 24))
+      const nextX = dragState.originX + deltaX
+      const nextY = dragState.originY + deltaY
       const currentPosition = assistantFloatPositionRef.current
       if (currentPosition && currentPosition.x === nextX && currentPosition.y === nextY) return
       applyAssistantFloatPosition({ x: nextX, y: nextY })
@@ -658,7 +651,7 @@ function WorkspaceApp({
       window.removeEventListener('pointercancel', handlePointerCancel)
       window.removeEventListener('blur', handleWindowBlur)
     }
-  }, [assistantOpen])
+  }, [applyAssistantFloatPosition, assistantSurface])
 
   const handleAssistantFloatDragStart = useCallback((event: ReactPointerEvent<HTMLElement>) => {
     if (window.innerWidth <= 720 || !event.isPrimary || event.button !== 0) return
@@ -677,9 +670,25 @@ function WorkspaceApp({
       handle,
     }
     document.body.classList.add('assistant-dragging')
-    applyAssistantFloatPosition(assistantFloatPositionRef.current ?? { x: panelRect.left, y: panelRect.top })
-    setAssistantFloatPosition((current) => current ?? { x: panelRect.left, y: panelRect.top })
+    const position = assistantFloatPositionRef.current ?? { x: panelRect.left, y: panelRect.top }
+    applyAssistantFloatPosition(position)
+    setAssistantFloatPosition(assistantFloatPositionRef.current)
   }, [applyAssistantFloatPosition])
+
+  const openHistoryAssistant = useCallback(() => {
+    if (window.innerWidth > 720 && !assistantFloatPositionRef.current) {
+      const panelWidth = Math.min(430, window.innerWidth - 24)
+      const position = initialAssistantFloatPosition({
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        panelWidth,
+        panelHeight: Math.min(640, window.innerHeight - 128),
+      })
+      assistantFloatPositionRef.current = position
+      setAssistantFloatPosition(position)
+    }
+    setAssistantSurface('history')
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -976,7 +985,7 @@ function WorkspaceApp({
     setEvidenceError('')
     setReport(null)
     setMarkdown('')
-    setAssistantOpen(false)
+    setAssistantSurface(null)
     setConversationId(null)
     setCustomerMessages([])
     setCustomerInput('')
@@ -1432,18 +1441,18 @@ function WorkspaceApp({
     </div>
   )
 
-  const renderCustomerService = () => !assistantOpen ? null : (
+  const renderCustomerService = () => assistantSurface !== 'decision' ? null : (
     <>
-      <button className="assistant-scrim" aria-label="关闭客服 AI" onClick={() => setAssistantOpen(false)} />
+      <button className="assistant-scrim" aria-label="关闭客服 AI" onClick={() => setAssistantSurface(null)} />
       <aside className="customer-service-drawer" role="dialog" aria-modal="false" aria-labelledby="customer-service-title">
         <header className="customer-service-head">
           <span className="customer-service-avatar"><Robot weight="duotone" /></span>
           <div><h2 id="customer-service-title">报告客服 AI</h2><p>解释报告结论，并按照你的要求修改指定内容。</p></div>
-          <button className="icon-button" aria-label="关闭客服 AI" onClick={() => setAssistantOpen(false)}><X weight="bold" /></button>
+          <button className="icon-button" aria-label="关闭客服 AI" onClick={() => setAssistantSurface(null)}><X weight="bold" /></button>
         </header>
 
         {!report ? (
-          <div className="customer-service-locked"><FileText weight="thin" /><h3>等待分析报告</h3><p>四个 Agent 完成分析并生成报告后，客服 AI 才能基于真实结论继续对话。</p><button className="compact-button" onClick={() => { setAssistantOpen(false); navigate(runId ? 'agents' : 'workspace') }}>{runId ? '查看 Agent 进度' : '创建分析任务'}</button></div>
+          <div className="customer-service-locked"><FileText weight="thin" /><h3>等待分析报告</h3><p>四个 Agent 完成分析并生成报告后，客服 AI 才能基于真实结论继续对话。</p><button className="compact-button" onClick={() => { setAssistantSurface(null); navigate(runId ? 'agents' : 'workspace') }}>{runId ? '查看 Agent 进度' : '创建分析任务'}</button></div>
         ) : (
           <>
             <fieldset className="personality-picker" disabled={customerBusy}>
@@ -1511,7 +1520,7 @@ function WorkspaceApp({
       <PageHeader
         title="上市分析报告"
         description="四个 Agent 完成协作与审校后，系统在这里呈现可继续编辑和交付的 Markdown 报告。"
-        action={<div className="report-header-actions">{report && <span className={`status-pill status-${report.audit_status}`}>{statusIcon(report.audit_status)}版本 {report.version} · {statusText(report.audit_status)}</span>}{renderReportExportActions('report')}<button className="assistant-launch-button" onClick={() => setAssistantOpen(true)}><Headset weight="duotone" /><span><strong>客服 AI</strong><small>{report ? '解释或增量修改报告' : '报告生成后可用'}</small></span></button></div>}
+        action={<div className="report-header-actions">{report && <span className={`status-pill status-${report.audit_status}`}>{statusIcon(report.audit_status)}版本 {report.version} · {statusText(report.audit_status)}</span>}{renderReportExportActions('report')}<button className="assistant-launch-button" onClick={() => setAssistantSurface('decision')}><Headset weight="duotone" /><span><strong>客服 AI</strong><small>{report ? '解释或增量修改报告' : '报告生成后可用'}</small></span></button></div>}
       />
       {markdown ? (
         <section className="report-shell glass-panel">
@@ -1546,7 +1555,7 @@ function WorkspaceApp({
       <nav className="section-switcher" aria-label="运营决策子页面">
         <button className={decisionSection === 'strategy' ? 'active' : ''} aria-pressed={decisionSection === 'strategy'} onClick={() => setDecisionSection('strategy')}><Megaphone weight="duotone" /><span><strong>营销策略</strong><small>定位与上市动作</small></span></button>
         <button className={decisionSection === 'report' ? 'active' : ''} aria-pressed={decisionSection === 'report'} onClick={() => setDecisionSection('report')}><FileText weight="duotone" /><span><strong>决策报告</strong><small>Markdown 与版本</small></span></button>
-        <button className="assistant-tab" onClick={() => setAssistantOpen(true)}><Headset weight="duotone" /><span><strong>客服 AI</strong><small>解释 · 澄清 · 增量修改</small></span><i>{conversationId ? '会话中' : 'NEW'}</i></button>
+        <button className="assistant-tab" onClick={() => setAssistantSurface('decision')}><Headset weight="duotone" /><span><strong>客服 AI</strong><small>解释 · 澄清 · 增量修改</small></span><i>{conversationId ? '会话中' : 'NEW'}</i></button>
       </nav>
       {decisionSection === 'strategy' ? renderStrategy() : renderReport()}
       {renderCustomerService()}
@@ -1555,7 +1564,7 @@ function WorkspaceApp({
 
   const renderHistoryAgentPanel = () => (
     <aside className="history-agent-panel glass-panel" aria-labelledby="history-agent-title">
-      <header className="history-panel-heading agent-heading">
+      <header className="history-panel-heading agent-heading assistant-drag-handle" onPointerDown={handleAssistantFloatDragStart}>
         <div className="assistant-panel-heading-copy">
           <span><Robot weight="duotone" /></span>
           <div><h2 id="history-agent-title">报告修改助手</h2><p>提出修改要求后，系统会保留原文并生成新版本。</p></div>
@@ -1598,7 +1607,7 @@ function WorkspaceApp({
     </aside>
   )
 
-  const renderHistoryAssistantFloating = () => !assistantOpen ? null : (
+  const renderHistoryAssistantFloating = () => assistantSurface !== 'history' ? null : (
     <>
       <div
         className="history-assistant-float"
@@ -1608,15 +1617,7 @@ function WorkspaceApp({
         aria-labelledby="history-agent-title"
         style={assistantFloatPosition ? { left: `${assistantFloatPosition.x}px`, top: `${assistantFloatPosition.y}px`, right: 'auto' } : undefined}
       >
-        <button
-          className="history-assistant-drag-button"
-          type="button"
-          aria-label="拖拽客服悬浮窗"
-          onPointerDown={handleAssistantFloatDragStart}
-        >
-          <SidebarSimple weight="bold" />
-        </button>
-        <button className="icon-button history-assistant-close" aria-label="关闭报告修改助手" onClick={() => setAssistantOpen(false)}><X weight="bold" /></button>
+        <button className="icon-button history-assistant-close" aria-label="关闭报告修改助手" onClick={() => setAssistantSurface(null)}><X weight="bold" /></button>
         {renderHistoryAgentPanel()}
       </div>
     </>
@@ -1734,7 +1735,7 @@ function WorkspaceApp({
             <div className="topbar-actions">
               <span className="shared-workspace-label">内部演示 · 共享工作区</span>
               <span className={`system-state ${connected === false ? 'offline' : ''}`}><i />{connected ? '系统可用' : connected === false ? '系统未连接' : '正在连接'}</span>
-              {page === 'audit' && <button className="topbar-icon-button" type="button" aria-label="打开报告修改助手" onClick={() => setAssistantOpen(true)}><Headset weight="duotone" /><span>客服</span></button>}
+              {page === 'audit' && <button className="topbar-icon-button" type="button" aria-label="打开报告修改助手" onClick={openHistoryAssistant}><Headset weight="duotone" /><span>客服</span></button>}
               <button className="demo-logout-button" type="button" onClick={() => { clearSharedAccessCode(); onLogout() }}><SignOut weight="bold" />退出演示环境</button>
             </div>
           </header>
