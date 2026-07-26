@@ -5155,34 +5155,3 @@ body.assistant-dragging * {
 .access-gate:is(.skin-snow, .skin-petal, .skin-linen, .skin-midnight) .theme-option-title-row em {
   font-family: 'IBM Plex Mono', monospace;
 }
-
-@media print {
-  @page { margin: 14mm; }
-
-  body[data-report-export] .app-shell > :not(.main-content),
-  body[data-report-export] .main-content > :not(.content-stage),
-  body[data-report-export] .report-export-actions,
-  body[data-report-export] .assistant-launch-button,
-  body[data-report-export] .history-assistant-float { display: none !important; }
-
-  body[data-report-export] .app-shell,
-  body[data-report-export] .main-content,
-  body[data-report-export] .content-stage,
-  body[data-report-export] .page-view,
-  body[data-report-export] .page-hub { display: block !important; min-height: 0; background: #fff !important; }
-
-  body[data-report-export='history'] .page-history > :not(.history-workbench),
-  body[data-report-export='history'] .history-workbench > :not(.history-document-panel) { display: none !important; }
-
-  body[data-report-export] :is(.report-shell, .history-document-panel, .report-paper, .history-report-paper) {
-    max-width: none;
-    max-height: none;
-    margin: 0;
-    border: 0;
-    border-radius: 0;
-    color: #18222d;
-    background: #fff;
-    box-shadow: none;
-    overflow: visible;
-  }
-}

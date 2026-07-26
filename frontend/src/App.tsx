@@ -74,7 +74,7 @@ import {
   saveSharedAccessCode,
 } from './auth'
 import { productCategoryOptions, targetMarketOptions } from './catalogOptions'
-import { downloadMarkdownReport } from './reportExport'
+import { downloadMarkdownReport, printReportDocument } from './reportExport'
 
 type PageKey = 'workspace' | 'agents' | 'decision' | 'audit'
 type DecisionSection = 'strategy' | 'report'
@@ -571,15 +571,6 @@ function WorkspaceApp({
   useEffect(() => {
     localStorage.setItem('tradepilot-sidebar-collapsed', String(sidebarCollapsed))
   }, [sidebarCollapsed])
-
-  useEffect(() => {
-    const clearPrintTarget = () => delete document.body.dataset.reportExport
-    window.addEventListener('afterprint', clearPrintTarget)
-    return () => {
-      window.removeEventListener('afterprint', clearPrintTarget)
-      clearPrintTarget()
-    }
-  }, [])
 
   useEffect(() => {
     assistantFloatPositionRef.current = assistantFloatPosition
@@ -1494,12 +1485,23 @@ function WorkspaceApp({
   const renderReportExportActions = (printTarget: 'report' | 'history') => {
     if (!markdown) return null
     const reportId = report?.report_id ?? selectedVersionReportId ?? ''
+    const reportTitle = printTarget === 'history'
+      ? `${activeHistoryItem?.product_name || '历史'}上市分析报告`
+      : '上市分析报告'
 
     return <div className="report-export-actions" aria-label="报告导出">
       <button type="button" onClick={() => downloadMarkdownReport(markdown, reportId)}><DownloadSimple weight="bold" /><span>下载 MD</span></button>
       <button type="button" onClick={() => {
-        document.body.dataset.reportExport = printTarget
-        window.requestAnimationFrame(() => window.print())
+        const content = document.querySelector(
+          printTarget === 'history' ? '.history-document-panel .history-report-paper' : '.page-report .report-paper',
+        )
+        if (!content) return
+        printReportDocument({
+          title: reportTitle,
+          reportId,
+          version: printTarget === 'history' ? selectedHistoryVersion?.version ?? report?.version : report?.version,
+          contentHtml: content.innerHTML,
+        })
       }}><FilePdf weight="bold" /><span>导出 PDF</span></button>
     </div>
   }

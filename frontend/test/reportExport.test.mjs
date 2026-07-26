@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { markdownDownloadFilename } from '../src/reportExport.ts'
+import { buildPrintableReportDocument, markdownDownloadFilename } from '../src/reportExport.ts'
 
 test('creates a safe Markdown filename from a report id', () => {
   assert.equal(
@@ -12,4 +12,18 @@ test('creates a safe Markdown filename from a report id', () => {
 
 test('uses a fallback Markdown filename when the report id is missing', () => {
   assert.equal(markdownDownloadFilename(''), 'tradepilot-report.md')
+})
+
+test('builds a standalone printable document containing only report content', () => {
+  const document = buildPrintableReportDocument({
+    title: '宠物饮水机上市分析报告',
+    reportId: 'report-123',
+    version: 2,
+    contentHtml: '<h1>结论</h1><p>正文内容</p>',
+  })
+
+  assert.match(document, /<title>宠物饮水机上市分析报告<\/title>/)
+  assert.match(document, /报告编号：report-123 · V2/)
+  assert.match(document, /<article><h1>结论<\/h1><p>正文内容<\/p><\/article>/)
+  assert.doesNotMatch(document, /sidebar|main-content|history-workbench/)
 })
