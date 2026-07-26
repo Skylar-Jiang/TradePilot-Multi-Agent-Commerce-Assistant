@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { clampAssistantFloatPosition, initialAssistantFloatPosition } from '../src/assistantFloat.ts'
+import { clampAssistantFloatPosition, draggedAssistantFloatPosition, initialAssistantFloatPosition } from '../src/assistantFloat.ts'
 
 test('opens the assistant aligned to the right without a delayed position jump', () => {
   assert.deepEqual(
@@ -35,5 +35,21 @@ test('prevents the assistant from being dragged above or past the left edge', ()
       panelHeight: 500,
     }),
     { x: 24, y: 96 },
+  )
+})
+
+test('preserves the pointer grab point while dragging in viewport coordinates', () => {
+  assert.deepEqual(
+    draggedAssistantFloatPosition({
+      pointerX: 708,
+      pointerY: 362,
+      grabOffsetX: 300,
+      grabOffsetY: 40,
+      viewportWidth: 1200,
+      viewportHeight: 900,
+      panelWidth: 430,
+      panelHeight: 500,
+    }),
+    { x: 408, y: 322 },
   )
 })

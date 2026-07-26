@@ -27,6 +27,25 @@ export function clampAssistantFloatPosition(position: FloatPosition & FloatBound
   }
 }
 
+export function draggedAssistantFloatPosition({
+  pointerX,
+  pointerY,
+  grabOffsetX,
+  grabOffsetY,
+  ...bounds
+}: {
+  pointerX: number
+  pointerY: number
+  grabOffsetX: number
+  grabOffsetY: number
+} & FloatBounds): FloatPosition {
+  return clampAssistantFloatPosition({
+    ...bounds,
+    x: pointerX - grabOffsetX,
+    y: pointerY - grabOffsetY,
+  })
+}
+
 export function initialAssistantFloatPosition(bounds: FloatBounds): FloatPosition {
   return clampAssistantFloatPosition({
     ...bounds,

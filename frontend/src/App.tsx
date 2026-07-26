@@ -1,4 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import {
   ArrowRight,
@@ -74,7 +75,7 @@ import {
   saveSharedAccessCode,
 } from './auth'
 import { productCategoryOptions, targetMarketOptions } from './catalogOptions'
-import { clampAssistantFloatPosition, initialAssistantFloatPosition } from './assistantFloat'
+import { clampAssistantFloatPosition, draggedAssistantFloatPosition, initialAssistantFloatPosition } from './assistantFloat'
 import { downloadMarkdownReport, printReportDocument } from './reportExport'
 
 type PageKey = 'workspace' | 'agents' | 'decision' | 'audit'
@@ -519,10 +520,8 @@ function WorkspaceApp({
   const assistantFloatPositionRef = useRef<{ x: number; y: number } | null>(null)
   const assistantDragRef = useRef<{
     pointerId: number
-    originX: number
-    originY: number
-    startClientX: number
-    startClientY: number
+    grabOffsetX: number
+    grabOffsetY: number
     handle: HTMLElement
   } | null>(null)
 
@@ -613,13 +612,21 @@ function WorkspaceApp({
       if (!dragState || dragState.pointerId !== event.pointerId) return
 
       event.preventDefault()
-      const deltaX = event.clientX - dragState.startClientX
-      const deltaY = event.clientY - dragState.startClientY
-      const nextX = dragState.originX + deltaX
-      const nextY = dragState.originY + deltaY
+      const panel = assistantFloatRef.current
+      if (!panel) return
+      const nextPosition = draggedAssistantFloatPosition({
+        pointerX: event.clientX,
+        pointerY: event.clientY,
+        grabOffsetX: dragState.grabOffsetX,
+        grabOffsetY: dragState.grabOffsetY,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        panelWidth: panel.offsetWidth || 430,
+        panelHeight: panel.offsetHeight || 640,
+      })
       const currentPosition = assistantFloatPositionRef.current
-      if (currentPosition && currentPosition.x === nextX && currentPosition.y === nextY) return
-      applyAssistantFloatPosition({ x: nextX, y: nextY })
+      if (currentPosition && currentPosition.x === nextPosition.x && currentPosition.y === nextPosition.y) return
+      applyAssistantFloatPosition(nextPosition)
     }
 
     const stopDragging = (pointerId?: number) => {
@@ -663,10 +670,8 @@ function WorkspaceApp({
     const panelRect = panel.getBoundingClientRect()
     assistantDragRef.current = {
       pointerId: event.pointerId,
-      originX: panelRect.left,
-      originY: panelRect.top,
-      startClientX: event.clientX,
-      startClientY: event.clientY,
+      grabOffsetX: event.clientX - panelRect.left,
+      grabOffsetY: event.clientY - panelRect.top,
       handle,
     }
     document.body.classList.add('assistant-dragging')
@@ -1607,8 +1612,7 @@ function WorkspaceApp({
     </aside>
   )
 
-  const renderHistoryAssistantFloating = () => assistantSurface !== 'history' ? null : (
-    <>
+  const renderHistoryAssistantFloating = () => assistantSurface !== 'history' ? null : createPortal(
       <div
         className="history-assistant-float"
         ref={assistantFloatRef}
@@ -1620,7 +1624,7 @@ function WorkspaceApp({
         <button className="icon-button history-assistant-close" aria-label="关闭报告修改助手" onClick={() => setAssistantSurface(null)}><X weight="bold" /></button>
         {renderHistoryAgentPanel()}
       </div>
-    </>
+    , document.body,
   )
 
   const renderHistoryWorkspace = () => (
