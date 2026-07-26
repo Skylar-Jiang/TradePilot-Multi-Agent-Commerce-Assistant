@@ -1547,7 +1547,7 @@ function WorkspaceApp({
     </div>
   )
 
-  const renderCustomerService = () => assistantSurface !== 'decision' ? null : (
+  const renderCustomerService = () => assistantSurface !== 'decision' ? null : createPortal(
     <>
       <button className="assistant-scrim" aria-label="关闭客服 AI" onClick={() => setAssistantSurface(null)} />
       <aside className="customer-service-drawer" role="dialog" aria-modal="false" aria-labelledby="customer-service-title">
@@ -1594,7 +1594,8 @@ function WorkspaceApp({
           </>
         )}
       </aside>
-    </>
+    </>,
+    assistantPortalRoot ?? document.body,
   )
 
   const renderReportExportActions = (printTarget: 'report' | 'history') => {
