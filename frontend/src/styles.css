@@ -192,6 +192,7 @@ img { display: block; max-width: 100%; }
 }
 
 .app-shell.sidebar-is-collapsed { grid-template-columns: 88px minmax(0, 1fr); }
+.assistant-portal-root { display: contents; }
 
 .particle-field {
   position: fixed;
@@ -3926,6 +3927,39 @@ select,
   overflow: auto;
 }
 
+.history-assistant-float.is-resized .history-agent-panel {
+  height: 100%;
+  max-height: none;
+}
+
+.assistant-resize-handle {
+  position: absolute;
+  z-index: 3;
+  right: 4px;
+  bottom: 4px;
+  width: 24px;
+  height: 24px;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+.assistant-resize-handle::before {
+  content: '';
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid var(--theme-text-soft, var(--ink-faint));
+  border-bottom: 2px solid var(--theme-text-soft, var(--ink-faint));
+  opacity: .9;
+}
+
+body.assistant-resizing {
+  cursor: nwse-resize;
+  user-select: none;
+}
+
 .history-assistant-close {
   position: absolute;
   top: 12px;
@@ -3962,6 +3996,8 @@ select,
     left: 12px;
     width: auto;
   }
+
+  .assistant-resize-handle { display: none; }
 }
 
 /* Neutral white-gray refinement for snow skin */

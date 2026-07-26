@@ -75,7 +75,7 @@ import {
   saveSharedAccessCode,
 } from './auth'
 import { productCategoryOptions, targetMarketOptions } from './catalogOptions'
-import { clampAssistantFloatPosition, draggedAssistantFloatPosition, initialAssistantFloatPosition } from './assistantFloat'
+import { clampAssistantFloatPosition, draggedAssistantFloatPosition, initialAssistantFloatPosition, resizedAssistantFloatSize } from './assistantFloat'
 import { downloadMarkdownReport, printReportDocument } from './reportExport'
 
 type PageKey = 'workspace' | 'agents' | 'decision' | 'audit'
@@ -507,6 +507,8 @@ function WorkspaceApp({
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [assistantSurface, setAssistantSurface] = useState<'decision' | 'history' | null>(null)
   const [assistantFloatPosition, setAssistantFloatPosition] = useState<{ x: number; y: number } | null>(null)
+  const [assistantFloatSize, setAssistantFloatSize] = useState<{ width: number; height: number } | null>(null)
+  const [assistantPortalRoot, setAssistantPortalRoot] = useState<HTMLDivElement | null>(null)
   const [personality, setPersonality] = useState<CustomerServicePersonality>('professional')
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [customerMessages, setCustomerMessages] = useState<CustomerServiceConversationMessage[]>([])
@@ -518,10 +520,21 @@ function WorkspaceApp({
   const [error, setError] = useState('')
   const assistantFloatRef = useRef<HTMLDivElement | null>(null)
   const assistantFloatPositionRef = useRef<{ x: number; y: number } | null>(null)
+  const assistantFloatSizeRef = useRef<{ width: number; height: number } | null>(null)
   const assistantDragRef = useRef<{
     pointerId: number
     grabOffsetX: number
     grabOffsetY: number
+    handle: HTMLElement
+  } | null>(null)
+  const assistantResizeRef = useRef<{
+    pointerId: number
+    startPointerX: number
+    startPointerY: number
+    startWidth: number
+    startHeight: number
+    panelX: number
+    panelY: number
     handle: HTMLElement
   } | null>(null)
 
@@ -576,6 +589,10 @@ function WorkspaceApp({
     assistantFloatPositionRef.current = assistantFloatPosition
   }, [assistantFloatPosition])
 
+  useEffect(() => {
+    assistantFloatSizeRef.current = assistantFloatSize
+  }, [assistantFloatSize])
+
   const applyAssistantFloatPosition = useCallback((position: { x: number; y: number }) => {
     const panel = assistantFloatRef.current
     const nextPosition = panel
@@ -595,6 +612,15 @@ function WorkspaceApp({
     assistantFloatPositionRef.current = nextPosition
   }, [])
 
+  const applyAssistantFloatSize = useCallback((size: { width: number; height: number }) => {
+    const panel = assistantFloatRef.current
+    if (panel) {
+      panel.style.width = `${size.width}px`
+      panel.style.height = `${size.height}px`
+    }
+    assistantFloatSizeRef.current = size
+  }, [])
+
   useEffect(() => {
     const expectedSurface = page === 'decision' ? 'decision' : page === 'audit' ? 'history' : null
     if (assistantSurface && assistantSurface !== expectedSurface) setAssistantSurface(null)
@@ -603,11 +629,35 @@ function WorkspaceApp({
   useEffect(() => {
     if (assistantSurface !== 'history') {
       assistantDragRef.current = null
+      assistantResizeRef.current = null
       document.body.classList.remove('assistant-dragging')
+      document.body.classList.remove('assistant-resizing')
       return
     }
 
     const handlePointerMove = (event: PointerEvent) => {
+      const resizeState = assistantResizeRef.current
+      if (resizeState?.pointerId === event.pointerId) {
+        event.preventDefault()
+        const nextSize = resizedAssistantFloatSize({
+          pointerX: event.clientX,
+          pointerY: event.clientY,
+          startPointerX: resizeState.startPointerX,
+          startPointerY: resizeState.startPointerY,
+          startWidth: resizeState.startWidth,
+          startHeight: resizeState.startHeight,
+          panelX: resizeState.panelX,
+          panelY: resizeState.panelY,
+          viewportWidth: window.innerWidth,
+          viewportHeight: window.innerHeight,
+        })
+        const currentSize = assistantFloatSizeRef.current
+        if (!currentSize || currentSize.width !== nextSize.width || currentSize.height !== nextSize.height) {
+          applyAssistantFloatSize(nextSize)
+        }
+        return
+      }
+
       const dragState = assistantDragRef.current
       if (!dragState || dragState.pointerId !== event.pointerId) return
 
@@ -642,9 +692,31 @@ function WorkspaceApp({
       document.body.classList.remove('assistant-dragging')
     }
 
-    const handlePointerUp = (event: PointerEvent) => stopDragging(event.pointerId)
-    const handlePointerCancel = (event: PointerEvent) => stopDragging(event.pointerId)
-    const handleWindowBlur = () => stopDragging()
+    const stopResizing = (pointerId?: number) => {
+      const resizeState = assistantResizeRef.current
+      if (!resizeState || (pointerId !== undefined && resizeState.pointerId !== pointerId)) return
+      if (assistantFloatSizeRef.current) {
+        setAssistantFloatSize(assistantFloatSizeRef.current)
+      }
+      if (resizeState.handle.hasPointerCapture(resizeState.pointerId)) {
+        resizeState.handle.releasePointerCapture(resizeState.pointerId)
+      }
+      assistantResizeRef.current = null
+      document.body.classList.remove('assistant-resizing')
+    }
+
+    const handlePointerUp = (event: PointerEvent) => {
+      stopDragging(event.pointerId)
+      stopResizing(event.pointerId)
+    }
+    const handlePointerCancel = (event: PointerEvent) => {
+      stopDragging(event.pointerId)
+      stopResizing(event.pointerId)
+    }
+    const handleWindowBlur = () => {
+      stopDragging()
+      stopResizing()
+    }
 
     window.addEventListener('pointermove', handlePointerMove)
     window.addEventListener('pointerup', handlePointerUp)
@@ -653,12 +725,13 @@ function WorkspaceApp({
 
     return () => {
       stopDragging()
+      stopResizing()
       window.removeEventListener('pointermove', handlePointerMove)
       window.removeEventListener('pointerup', handlePointerUp)
       window.removeEventListener('pointercancel', handlePointerCancel)
       window.removeEventListener('blur', handleWindowBlur)
     }
-  }, [applyAssistantFloatPosition, assistantSurface])
+  }, [applyAssistantFloatPosition, applyAssistantFloatSize, assistantSurface])
 
   const handleAssistantFloatDragStart = useCallback((event: ReactPointerEvent<HTMLElement>) => {
     if (window.innerWidth <= 720 || !event.isPrimary || event.button !== 0) return
@@ -679,6 +752,34 @@ function WorkspaceApp({
     applyAssistantFloatPosition(position)
     setAssistantFloatPosition(assistantFloatPositionRef.current)
   }, [applyAssistantFloatPosition])
+
+  const handleAssistantFloatResizeStart = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (window.innerWidth <= 720 || !event.isPrimary || event.button !== 0) return
+    const panel = assistantFloatRef.current
+    if (!panel) return
+    event.preventDefault()
+    event.stopPropagation()
+    const handle = event.currentTarget
+    handle.setPointerCapture(event.pointerId)
+    const panelRect = panel.getBoundingClientRect()
+    const position = assistantFloatPositionRef.current ?? { x: panelRect.left, y: panelRect.top }
+    const size = { width: panelRect.width, height: panelRect.height }
+    assistantFloatPositionRef.current = position
+    assistantFloatSizeRef.current = size
+    assistantResizeRef.current = {
+      pointerId: event.pointerId,
+      startPointerX: event.clientX,
+      startPointerY: event.clientY,
+      startWidth: size.width,
+      startHeight: size.height,
+      panelX: position.x,
+      panelY: position.y,
+      handle,
+    }
+    setAssistantFloatPosition(position)
+    setAssistantFloatSize(size)
+    document.body.classList.add('assistant-resizing')
+  }, [])
 
   const openHistoryAssistant = useCallback(() => {
     if (window.innerWidth > 720 && !assistantFloatPositionRef.current) {
@@ -1614,17 +1715,21 @@ function WorkspaceApp({
 
   const renderHistoryAssistantFloating = () => assistantSurface !== 'history' ? null : createPortal(
       <div
-        className="history-assistant-float"
+        className={`history-assistant-float${assistantFloatSize ? ' is-resized' : ''}`}
         ref={assistantFloatRef}
         role="dialog"
         aria-modal="false"
         aria-labelledby="history-agent-title"
-        style={assistantFloatPosition ? { left: `${assistantFloatPosition.x}px`, top: `${assistantFloatPosition.y}px`, right: 'auto' } : undefined}
+        style={{
+          ...(assistantFloatPosition ? { left: `${assistantFloatPosition.x}px`, top: `${assistantFloatPosition.y}px`, right: 'auto' } : {}),
+          ...(assistantFloatSize ? { width: `${assistantFloatSize.width}px`, height: `${assistantFloatSize.height}px` } : {}),
+        }}
       >
         <button className="icon-button history-assistant-close" aria-label="关闭报告修改助手" onClick={() => setAssistantSurface(null)}><X weight="bold" /></button>
         {renderHistoryAgentPanel()}
+        <div className="assistant-resize-handle" aria-hidden="true" onPointerDown={handleAssistantFloatResizeStart} />
       </div>
-    , document.body,
+    , assistantPortalRoot ?? document.body,
   )
 
   const renderHistoryWorkspace = () => (
@@ -1751,6 +1856,7 @@ function WorkspaceApp({
           </div>
           <footer><div><strong>TradePilot</strong><span>基于多智能体的跨境商品智能运营决策助手</span></div><span>证据优先 · 过程透明 · 人机共决策</span></footer>
         </main>
+        <div className="assistant-portal-root" ref={setAssistantPortalRoot} />
       </div>
     </>
   )

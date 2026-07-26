@@ -12,6 +12,8 @@ type FloatBounds = {
 
 const MIN_X = 24
 const MIN_Y = 96
+const MIN_WIDTH = 340
+const MIN_HEIGHT = 420
 const clamp = (value: number, minimum: number, maximum: number) => Math.min(Math.max(value, minimum), maximum)
 
 export function clampAssistantFloatPosition(position: FloatPosition & FloatBounds): FloatPosition {
@@ -52,4 +54,36 @@ export function initialAssistantFloatPosition(bounds: FloatBounds): FloatPositio
     x: bounds.viewportWidth - bounds.panelWidth - 32,
     y: 112,
   })
+}
+
+export function resizedAssistantFloatSize({
+  pointerX,
+  pointerY,
+  startPointerX,
+  startPointerY,
+  startWidth,
+  startHeight,
+  panelX,
+  panelY,
+  viewportWidth,
+  viewportHeight,
+}: {
+  pointerX: number
+  pointerY: number
+  startPointerX: number
+  startPointerY: number
+  startWidth: number
+  startHeight: number
+  panelX: number
+  panelY: number
+  viewportWidth: number
+  viewportHeight: number
+}) {
+  const maxWidth = Math.max(1, viewportWidth - panelX - MIN_X)
+  const maxHeight = Math.max(1, viewportHeight - panelY - MIN_X)
+
+  return {
+    width: clamp(startWidth + pointerX - startPointerX, Math.min(MIN_WIDTH, maxWidth), maxWidth),
+    height: clamp(startHeight + pointerY - startPointerY, Math.min(MIN_HEIGHT, maxHeight), maxHeight),
+  }
 }
