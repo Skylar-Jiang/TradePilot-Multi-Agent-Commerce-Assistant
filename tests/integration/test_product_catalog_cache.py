@@ -1,6 +1,10 @@
 import json
+import os
 from pathlib import Path
 
+import pytest
+
+from app.core.exceptions import DataPreparationRequiredError
 from app.domain.product_catalog import ProductCatalog
 
 
@@ -63,3 +67,38 @@ def test_catalog_cache_rebuilds_when_source_changes(tmp_path: Path) -> None:
     assert rebuilt.rebuilt is True
     assert rebuilt.rows_scanned == 2
     assert rebuilt.row_count == 2
+
+
+def test_catalog_cache_remains_prepared_when_only_source_mtime_changes(tmp_path: Path) -> None:
+    source = tmp_path / "metadata.jsonl"
+    cache_path = tmp_path / "product_catalog.sqlite"
+    _write_jsonl(source, [_metadata_row("P1", "Ceramic Cat Water Fountain")])
+    ProductCatalog.build(source, cache_path)
+
+    stat = source.stat()
+    os.utime(source, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000_000))
+
+    prepared = ProductCatalog.open_prepared(source, cache_path)
+
+    assert prepared.rebuilt is False
+    assert prepared.row_count == 1
+
+
+def test_catalog_cache_requires_preparation_when_cache_is_missing(tmp_path: Path) -> None:
+    source = tmp_path / "metadata.jsonl"
+    _write_jsonl(source, [_metadata_row("P1", "Ceramic Cat Water Fountain")])
+
+    with pytest.raises(DataPreparationRequiredError, match="product catalog cache is missing"):
+        ProductCatalog.open_prepared(source, tmp_path / "product_catalog.sqlite")
+
+
+def test_catalog_cache_is_stale_when_same_size_source_content_changes(tmp_path: Path) -> None:
+    source = tmp_path / "metadata.jsonl"
+    cache_path = tmp_path / "product_catalog.sqlite"
+    _write_jsonl(source, [_metadata_row("P1", "Ceramic Cat Water Fountain")])
+    ProductCatalog.build(source, cache_path)
+
+    source.write_bytes(source.read_bytes().replace(b"Fountain", b"FountAin", 1))
+
+    with pytest.raises(DataPreparationRequiredError, match="product catalog cache is stale"):
+        ProductCatalog.open_prepared(source, cache_path)

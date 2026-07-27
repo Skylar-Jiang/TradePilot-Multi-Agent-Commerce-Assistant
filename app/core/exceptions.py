@@ -10,6 +10,38 @@ class TradePilotError(RuntimeError):
         self.details = details or []
 
 
+class SharedAccessDeniedError(TradePilotError):
+    def __init__(self):
+        super().__init__(ErrorCode.UNAUTHORIZED, "Invalid or missing shared access code", 401)
+
+
+class AnalysisAlreadyRunningError(TradePilotError):
+    def __init__(self):
+        super().__init__(
+            ErrorCode.ANALYSIS_ALREADY_RUNNING,
+            "An analysis is already active for this product",
+            409,
+        )
+
+
+class AnalysisCapacityReachedError(TradePilotError):
+    def __init__(self):
+        super().__init__(
+            ErrorCode.ANALYSIS_CAPACITY_REACHED,
+            "The shared demo workspace already has the maximum number of active analyses",
+            429,
+        )
+
+
+class AnalysisRateLimitedError(TradePilotError):
+    def __init__(self):
+        super().__init__(
+            ErrorCode.ANALYSIS_RATE_LIMITED,
+            "Too many analysis starts; wait before trying again",
+            429,
+        )
+
+
 class ResourceNotFoundError(TradePilotError):
     def __init__(self, resource: str, resource_id: str | None = None):
         message = resource if resource_id is None else f"{resource} not found: {resource_id}"

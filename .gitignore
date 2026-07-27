@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.playwright-cli/
 .ruff_cache/
 .mypy_cache/
 .coverage
@@ -18,6 +19,7 @@ env/
 !.env.example
 !.env.development.example
 !.env.production.example
+!.env.staging.example
 
 *.db
 *.sqlite
@@ -30,6 +32,7 @@ data/chroma/
 data/demo/
 data/uploads/*
 data/reports/*
+*.source-identity.json
 !data/uploads/.gitkeep
 !data/reports/.gitkeep
 logs/

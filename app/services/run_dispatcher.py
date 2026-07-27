@@ -37,17 +37,24 @@ class RunDispatcher:
             thread_name_prefix="tradepilot-run",
         )
         self._futures: set[Future[None]] = set()
+        self._submitted_run_ids: set[str] = set()
         self._lock = Lock()
 
     def submit(self, run_id: str) -> None:
+        with self._lock:
+            if run_id in self._submitted_run_ids:
+                return
+            self._submitted_run_ids.add(run_id)
         future = self.executor.submit(self._execute, run_id)
         with self._lock:
             self._futures.add(future)
-        future.add_done_callback(self._discard)
+        future.add_done_callback(lambda completed: self._discard(run_id, completed))
 
     def recover_pending(self) -> int:
         with self.session_factory() as session:
-            run_ids = SqlAlchemyAnalysisRepository(session).list_run_ids({RunStatus.PENDING})
+            run_ids = SqlAlchemyAnalysisRepository(session).list_run_ids({RunStatus.PENDING})[
+                : self.settings.analysis_max_active_runs
+            ]
         for run_id in run_ids:
             self.submit(run_id)
         if run_ids:
@@ -136,6 +143,15 @@ class RunDispatcher:
                     event_type="workflow_failed",
                     payload={"error_type": error.get("type", type(exc).__name__), "fallback_used": False},
                 )
+                logger.error(
+                    "analysis run failed",
+                    extra={
+                        "run_id": run_id,
+                        "failed_stage": failed_stage_key or run.current_node,
+                        "error_type": error.get("type", type(exc).__name__),
+                        "error_code": error.get("code"),
+                    },
+                )
 
     @staticmethod
     def _serialize_error(exc: Exception) -> dict[str, Any]:
@@ -148,9 +164,10 @@ class RunDispatcher:
             }
         return {"type": type(exc).__name__, "message": str(exc)}
 
-    def _discard(self, future: Future[None]) -> None:
+    def _discard(self, run_id: str, future: Future[None]) -> None:
         with self._lock:
             self._futures.discard(future)
+            self._submitted_run_ids.discard(run_id)
         try:
             error = future.exception()
         except Exception:

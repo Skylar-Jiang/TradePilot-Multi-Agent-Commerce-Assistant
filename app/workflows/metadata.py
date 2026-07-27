@@ -75,7 +75,15 @@ def workflow_metadata(settings: Settings) -> dict[str, Any]:
                 "model_name": getattr(settings, agent[3]) if agent else None,
             }
         )
-    return {"nodes": nodes, "edges": WORKFLOW_EDGES, "audit_retry_limit": 1}
+    return {
+        "nodes": nodes,
+        "edges": WORKFLOW_EDGES,
+        "audit_retry_limit": 1,
+        "workspace_mode": "shared_demo",
+        "workspace_notice": (
+            "Single shared workspace: products, runs, conversations, memory, uploads and reports are shared."
+        ),
+    }
 
 
 def agent_frontend_view(

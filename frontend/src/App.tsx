@@ -1,5 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, ReactNode } from 'react'
+import { createPortal } from 'react-dom'
+import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import {
   ArrowRight,
   Archive,
@@ -14,7 +15,9 @@ import {
   Compass,
   CurrencyDollar,
   Database,
+  DownloadSimple,
   FileText,
+  FilePdf,
   Fingerprint,
   Globe,
   Headset,
@@ -22,6 +25,7 @@ import {
   ListChecks,
   MagnifyingGlass,
   Megaphone,
+  Moon,
   Package,
   PaperPlaneTilt,
   Play,
@@ -32,7 +36,9 @@ import {
   Scales,
   ShieldCheck,
   SidebarSimple,
+  SignOut,
   Sparkle,
+  Heartbeat,
   Target,
   UploadSimple,
   UsersThree,
@@ -41,8 +47,13 @@ import {
   XCircle,
 } from '@phosphor-icons/react'
 import ReactMarkdown from 'react-markdown'
+import portraitOne from './1.jpg'
+import portraitTwo from './2.jpg'
+import portraitThree from './3.jpg'
+import portraitFour from './4.jpg'
 import { SearchableCombobox } from './SearchableCombobox'
 import {
+  ApiRequestError,
   api,
   type AgentView,
   type AuditResult,
@@ -57,11 +68,20 @@ import {
   type RunStatus,
   type WorkflowMetadata,
 } from './api'
+import {
+  ACCESS_CLEARED_EVENT,
+  clearSharedAccessCode,
+  hasSharedAccessCode,
+  saveSharedAccessCode,
+} from './auth'
 import { productCategoryOptions, targetMarketOptions } from './catalogOptions'
+import { clampAssistantFloatPosition, draggedAssistantFloatPosition, initialAssistantFloatPosition, resizedAssistantFloatSize } from './assistantFloat'
+import { downloadMarkdownReport, printReportDocument } from './reportExport'
 
 type PageKey = 'workspace' | 'agents' | 'decision' | 'audit'
 type DecisionSection = 'strategy' | 'report'
 type AuditSection = 'audit' | 'tariff' | 'evidence'
+type VisualTheme = 'snow' | 'petal' | 'linen' | 'midnight'
 
 type MarketingStrategy = {
   positioning?: string
@@ -146,6 +166,68 @@ type FormState = {
   currency: string
 }
 
+const VISUAL_THEME_STORAGE_KEY = 'tradepilot-visual-theme'
+
+const visualThemeOptions: Array<{
+  value: VisualTheme
+  label: string
+  caption: string
+  detail: string
+  available: boolean
+  previewClass: string
+  imageSrc: string
+  icon: typeof Sparkle
+}> = [
+  {
+    value: 'snow',
+    label: 'Snow White',
+    caption: 'Live now',
+    detail: 'White canvas, soft paper surfaces, calm editorial contrast.',
+    available: true,
+    previewClass: 'preview-snow',
+    imageSrc: portraitOne,
+    icon: Sparkle,
+  },
+  {
+    value: 'petal',
+    label: 'Petal Pink',
+    caption: 'Live now',
+    detail: 'Warm blush palette with softer highlights and lighter accents.',
+    available: true,
+    previewClass: 'preview-petal',
+    imageSrc: portraitTwo,
+    icon: Heartbeat,
+  },
+  {
+    value: 'linen',
+    label: 'Linen Sand',
+    caption: 'Live now',
+    detail: 'Natural beige neutrals for a calmer product presentation mood.',
+    available: true,
+    previewClass: 'preview-linen',
+    imageSrc: portraitFour,
+    icon: BookOpenText,
+  },
+  {
+    value: 'midnight',
+    label: 'Midnight Ink',
+    caption: 'Live now',
+    detail: 'Dark editorial mode with sharper contrast and subdued glow.',
+    available: true,
+    previewClass: 'preview-midnight',
+    imageSrc: portraitThree,
+    icon: Moon,
+  },
+]
+
+function readStoredVisualTheme(): VisualTheme {
+  if (typeof window === 'undefined') return 'snow'
+  const storedValue = window.localStorage.getItem(VISUAL_THEME_STORAGE_KEY)
+  return visualThemeOptions.some((option) => option.value === storedValue)
+    ? storedValue as VisualTheme
+    : 'snow'
+}
+
 const initialForm: FormState = {
   name: '轻量反光防挣脱犬用胸背带',
   category: '犬用胸背带',
@@ -203,10 +285,10 @@ const agentDefinitions = [
 ] as const
 
 const navigation: Array<{ key: PageKey; label: string; caption: string; icon: typeof Lightning; agent: string }> = [
-  { key: 'workspace', label: '商品市场', caption: '任务创建 · 白', icon: ChartLineUp, agent: 'A01' },
-  { key: 'agents', label: '用户洞察', caption: '协作流程 · 粉', icon: UsersThree, agent: 'A02' },
-  { key: 'decision', label: '运营决策', caption: '策略报告 · 棕', icon: Compass, agent: 'A03' },
-  { key: 'audit', label: '历史文档', caption: '版本协作 · 蓝', icon: Archive, agent: 'A04' },
+  { key: 'workspace', label: '商品市场', caption: '任务创建', icon: ChartLineUp, agent: 'A01' },
+  { key: 'agents', label: '用户洞察', caption: '协作流程', icon: UsersThree, agent: 'A02' },
+  { key: 'decision', label: '运营决策', caption: '策略报告', icon: Compass, agent: 'A03' },
+  { key: 'audit', label: '历史文档', caption: '版本协作', icon: Archive, agent: 'A04' },
 ]
 
 const legacyPageAliases: Record<string, PageKey> = {
@@ -372,7 +454,13 @@ function PageHeader({ title, description, action }: {
   )
 }
 
-function App() {
+function WorkspaceApp({
+  onLogout,
+  visualTheme,
+}: {
+  onLogout: () => void
+  visualTheme: VisualTheme
+}) {
   const [page, setPage] = useState<PageKey>(pageFromHash)
   const [themeFrom, setThemeFrom] = useState<PageKey>(pageFromHash)
   const [themeTo, setThemeTo] = useState<PageKey>(pageFromHash)
@@ -417,7 +505,10 @@ function App() {
   const [historyBusy, setHistoryBusy] = useState(false)
   const [historyError, setHistoryError] = useState('')
   const [archiveOpen, setArchiveOpen] = useState(false)
-  const [assistantOpen, setAssistantOpen] = useState(false)
+  const [assistantSurface, setAssistantSurface] = useState<'decision' | 'history' | null>(null)
+  const [assistantFloatPosition, setAssistantFloatPosition] = useState<{ x: number; y: number } | null>(null)
+  const [assistantFloatSize, setAssistantFloatSize] = useState<{ width: number; height: number } | null>(null)
+  const [assistantPortalRoot, setAssistantPortalRoot] = useState<HTMLDivElement | null>(null)
   const [personality, setPersonality] = useState<CustomerServicePersonality>('professional')
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [customerMessages, setCustomerMessages] = useState<CustomerServiceConversationMessage[]>([])
@@ -427,6 +518,25 @@ function App() {
   const [customerResult, setCustomerResult] = useState<CustomerServiceMessageResponse | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const assistantFloatRef = useRef<HTMLDivElement | null>(null)
+  const assistantFloatPositionRef = useRef<{ x: number; y: number } | null>(null)
+  const assistantFloatSizeRef = useRef<{ width: number; height: number } | null>(null)
+  const assistantDragRef = useRef<{
+    pointerId: number
+    grabOffsetX: number
+    grabOffsetY: number
+    handle: HTMLElement
+  } | null>(null)
+  const assistantResizeRef = useRef<{
+    pointerId: number
+    startPointerX: number
+    startPointerY: number
+    startWidth: number
+    startHeight: number
+    panelX: number
+    panelY: number
+    handle: HTMLElement
+  } | null>(null)
 
   const startPageTransition = useCallback((nextPage: PageKey) => {
     const currentPage = pageRef.current
@@ -474,6 +584,217 @@ function App() {
   useEffect(() => {
     localStorage.setItem('tradepilot-sidebar-collapsed', String(sidebarCollapsed))
   }, [sidebarCollapsed])
+
+  useEffect(() => {
+    assistantFloatPositionRef.current = assistantFloatPosition
+  }, [assistantFloatPosition])
+
+  useEffect(() => {
+    assistantFloatSizeRef.current = assistantFloatSize
+  }, [assistantFloatSize])
+
+  const applyAssistantFloatPosition = useCallback((position: { x: number; y: number }) => {
+    const panel = assistantFloatRef.current
+    const nextPosition = panel
+      ? clampAssistantFloatPosition({
+        ...position,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        panelWidth: panel.offsetWidth || 430,
+        panelHeight: panel.offsetHeight || 640,
+      })
+      : position
+    if (panel) {
+      panel.style.left = `${nextPosition.x}px`
+      panel.style.top = `${nextPosition.y}px`
+      panel.style.right = 'auto'
+    }
+    assistantFloatPositionRef.current = nextPosition
+  }, [])
+
+  const applyAssistantFloatSize = useCallback((size: { width: number; height: number }) => {
+    const panel = assistantFloatRef.current
+    if (panel) {
+      panel.style.width = `${size.width}px`
+      panel.style.height = `${size.height}px`
+    }
+    assistantFloatSizeRef.current = size
+  }, [])
+
+  useEffect(() => {
+    const expectedSurface = page === 'decision' ? 'decision' : page === 'audit' ? 'history' : null
+    if (assistantSurface && assistantSurface !== expectedSurface) setAssistantSurface(null)
+  }, [assistantSurface, page])
+
+  useEffect(() => {
+    if (assistantSurface !== 'history') {
+      assistantDragRef.current = null
+      assistantResizeRef.current = null
+      document.body.classList.remove('assistant-dragging')
+      document.body.classList.remove('assistant-resizing')
+      return
+    }
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const resizeState = assistantResizeRef.current
+      if (resizeState?.pointerId === event.pointerId) {
+        event.preventDefault()
+        const nextSize = resizedAssistantFloatSize({
+          pointerX: event.clientX,
+          pointerY: event.clientY,
+          startPointerX: resizeState.startPointerX,
+          startPointerY: resizeState.startPointerY,
+          startWidth: resizeState.startWidth,
+          startHeight: resizeState.startHeight,
+          panelX: resizeState.panelX,
+          panelY: resizeState.panelY,
+          viewportWidth: window.innerWidth,
+          viewportHeight: window.innerHeight,
+        })
+        const currentSize = assistantFloatSizeRef.current
+        if (!currentSize || currentSize.width !== nextSize.width || currentSize.height !== nextSize.height) {
+          applyAssistantFloatSize(nextSize)
+        }
+        return
+      }
+
+      const dragState = assistantDragRef.current
+      if (!dragState || dragState.pointerId !== event.pointerId) return
+
+      event.preventDefault()
+      const panel = assistantFloatRef.current
+      if (!panel) return
+      const nextPosition = draggedAssistantFloatPosition({
+        pointerX: event.clientX,
+        pointerY: event.clientY,
+        grabOffsetX: dragState.grabOffsetX,
+        grabOffsetY: dragState.grabOffsetY,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        panelWidth: panel.offsetWidth || 430,
+        panelHeight: panel.offsetHeight || 640,
+      })
+      const currentPosition = assistantFloatPositionRef.current
+      if (currentPosition && currentPosition.x === nextPosition.x && currentPosition.y === nextPosition.y) return
+      applyAssistantFloatPosition(nextPosition)
+    }
+
+    const stopDragging = (pointerId?: number) => {
+      const dragState = assistantDragRef.current
+      if (!dragState || (pointerId !== undefined && dragState.pointerId !== pointerId)) return
+      if (assistantFloatPositionRef.current) {
+        setAssistantFloatPosition(assistantFloatPositionRef.current)
+      }
+      if (dragState.handle.hasPointerCapture(dragState.pointerId)) {
+        dragState.handle.releasePointerCapture(dragState.pointerId)
+      }
+      assistantDragRef.current = null
+      document.body.classList.remove('assistant-dragging')
+    }
+
+    const stopResizing = (pointerId?: number) => {
+      const resizeState = assistantResizeRef.current
+      if (!resizeState || (pointerId !== undefined && resizeState.pointerId !== pointerId)) return
+      if (assistantFloatSizeRef.current) {
+        setAssistantFloatSize(assistantFloatSizeRef.current)
+      }
+      if (resizeState.handle.hasPointerCapture(resizeState.pointerId)) {
+        resizeState.handle.releasePointerCapture(resizeState.pointerId)
+      }
+      assistantResizeRef.current = null
+      document.body.classList.remove('assistant-resizing')
+    }
+
+    const handlePointerUp = (event: PointerEvent) => {
+      stopDragging(event.pointerId)
+      stopResizing(event.pointerId)
+    }
+    const handlePointerCancel = (event: PointerEvent) => {
+      stopDragging(event.pointerId)
+      stopResizing(event.pointerId)
+    }
+    const handleWindowBlur = () => {
+      stopDragging()
+      stopResizing()
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+    window.addEventListener('pointercancel', handlePointerCancel)
+    window.addEventListener('blur', handleWindowBlur)
+
+    return () => {
+      stopDragging()
+      stopResizing()
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+      window.removeEventListener('pointercancel', handlePointerCancel)
+      window.removeEventListener('blur', handleWindowBlur)
+    }
+  }, [applyAssistantFloatPosition, applyAssistantFloatSize, assistantSurface])
+
+  const handleAssistantFloatDragStart = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+    if (window.innerWidth <= 720 || !event.isPrimary || event.button !== 0) return
+    const panel = assistantFloatRef.current
+    if (!panel) return
+    event.preventDefault()
+    const handle = event.currentTarget
+    handle.setPointerCapture(event.pointerId)
+    const panelRect = panel.getBoundingClientRect()
+    assistantDragRef.current = {
+      pointerId: event.pointerId,
+      grabOffsetX: event.clientX - panelRect.left,
+      grabOffsetY: event.clientY - panelRect.top,
+      handle,
+    }
+    document.body.classList.add('assistant-dragging')
+    const position = assistantFloatPositionRef.current ?? { x: panelRect.left, y: panelRect.top }
+    applyAssistantFloatPosition(position)
+    setAssistantFloatPosition(assistantFloatPositionRef.current)
+  }, [applyAssistantFloatPosition])
+
+  const handleAssistantFloatResizeStart = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (window.innerWidth <= 720 || !event.isPrimary || event.button !== 0) return
+    const panel = assistantFloatRef.current
+    if (!panel) return
+    event.preventDefault()
+    event.stopPropagation()
+    const handle = event.currentTarget
+    handle.setPointerCapture(event.pointerId)
+    const panelRect = panel.getBoundingClientRect()
+    const position = assistantFloatPositionRef.current ?? { x: panelRect.left, y: panelRect.top }
+    const size = { width: panelRect.width, height: panelRect.height }
+    assistantFloatPositionRef.current = position
+    assistantFloatSizeRef.current = size
+    assistantResizeRef.current = {
+      pointerId: event.pointerId,
+      startPointerX: event.clientX,
+      startPointerY: event.clientY,
+      startWidth: size.width,
+      startHeight: size.height,
+      panelX: position.x,
+      panelY: position.y,
+      handle,
+    }
+    setAssistantFloatPosition(position)
+    setAssistantFloatSize(size)
+    document.body.classList.add('assistant-resizing')
+  }, [])
+
+  const openHistoryAssistant = useCallback(() => {
+    if (window.innerWidth > 720 && !assistantFloatPositionRef.current) {
+      const panelWidth = Math.min(430, window.innerWidth - 24)
+      const position = initialAssistantFloatPosition({
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        panelWidth,
+        panelHeight: Math.min(640, window.innerHeight - 128),
+      })
+      assistantFloatPositionRef.current = position
+      setAssistantFloatPosition(position)
+    }
+    setAssistantSurface('history')
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -710,6 +1031,13 @@ function App() {
     setCustomerMessages(conversation.messages)
   }
 
+  const normalizeCustomerError = (error: unknown) => {
+    if (error instanceof Error && error.message === 'Targeted customer-service regeneration requires existing report evidence bindings') {
+      return '当前报告缺少证据绑定，暂时无法做定向改写。请先生成完整可审校报告后再修改。'
+    }
+    return error instanceof Error ? error.message : '客服助手暂时无法响应。'
+  }
+
   const handleCustomerMessage = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const message = customerInput.trim()
@@ -739,6 +1067,7 @@ function App() {
       ])
     } catch (customerServiceError) {
       setCustomerError(customerServiceError instanceof Error ? customerServiceError.message : '客服 Agent 暂时无法响应。')
+      setCustomerError(normalizeCustomerError(customerServiceError))
       setCustomerMessages((current) => current.filter((item) => !item.message_id.startsWith('optimistic-')))
       setCustomerInput(message)
     } finally {
@@ -762,7 +1091,7 @@ function App() {
     setEvidenceError('')
     setReport(null)
     setMarkdown('')
-    setAssistantOpen(false)
+    setAssistantSurface(null)
     setConversationId(null)
     setCustomerMessages([])
     setCustomerInput('')
@@ -829,7 +1158,7 @@ function App() {
               value={form.category}
               options={productCategoryOptions}
               placeholder="搜索或输入商品类别"
-              helperText="选择常用品类，或输入自定义类别"
+              helperText="选择常用品类，或输入自定义商品类别"
               icon={<Package weight="duotone" />}
               onChange={(category) => setForm((current) => ({ ...current, category }))}
             />
@@ -1218,18 +1547,18 @@ function App() {
     </div>
   )
 
-  const renderCustomerService = () => !assistantOpen ? null : (
+  const renderCustomerService = () => assistantSurface !== 'decision' ? null : createPortal(
     <>
-      <button className="assistant-scrim" aria-label="关闭客服 AI" onClick={() => setAssistantOpen(false)} />
+      <button className="assistant-scrim" aria-label="关闭客服 AI" onClick={() => setAssistantSurface(null)} />
       <aside className="customer-service-drawer" role="dialog" aria-modal="false" aria-labelledby="customer-service-title">
         <header className="customer-service-head">
           <span className="customer-service-avatar"><Robot weight="duotone" /></span>
           <div><h2 id="customer-service-title">报告客服 AI</h2><p>解释报告结论，并按照你的要求修改指定内容。</p></div>
-          <button className="icon-button" aria-label="关闭客服 AI" onClick={() => setAssistantOpen(false)}><X weight="bold" /></button>
+          <button className="icon-button" aria-label="关闭客服 AI" onClick={() => setAssistantSurface(null)}><X weight="bold" /></button>
         </header>
 
         {!report ? (
-          <div className="customer-service-locked"><FileText weight="thin" /><h3>等待分析报告</h3><p>四个 Agent 完成分析并生成报告后，客服 AI 才能基于真实结论继续对话。</p><button className="compact-button" onClick={() => { setAssistantOpen(false); navigate(runId ? 'agents' : 'workspace') }}>{runId ? '查看 Agent 进度' : '创建分析任务'}</button></div>
+          <div className="customer-service-locked"><FileText weight="thin" /><h3>等待分析报告</h3><p>四个 Agent 完成分析并生成报告后，客服 AI 才能基于真实结论继续对话。</p><button className="compact-button" onClick={() => { setAssistantSurface(null); navigate(runId ? 'agents' : 'workspace') }}>{runId ? '查看 Agent 进度' : '创建分析任务'}</button></div>
         ) : (
           <>
             <fieldset className="personality-picker" disabled={customerBusy}>
@@ -1265,15 +1594,40 @@ function App() {
           </>
         )}
       </aside>
-    </>
+    </>,
+    assistantPortalRoot ?? document.body,
   )
+
+  const renderReportExportActions = (printTarget: 'report' | 'history') => {
+    if (!markdown) return null
+    const reportId = report?.report_id ?? selectedVersionReportId ?? ''
+    const reportTitle = printTarget === 'history'
+      ? `${activeHistoryItem?.product_name || '历史'}上市分析报告`
+      : '上市分析报告'
+
+    return <div className="report-export-actions" aria-label="报告导出">
+      <button type="button" onClick={() => downloadMarkdownReport(markdown, reportId)}><DownloadSimple weight="bold" /><span>下载 MD</span></button>
+      <button type="button" onClick={() => {
+        const content = document.querySelector(
+          printTarget === 'history' ? '.history-document-panel .history-report-paper' : '.page-report .report-paper',
+        )
+        if (!content) return
+        printReportDocument({
+          title: reportTitle,
+          reportId,
+          version: printTarget === 'history' ? selectedHistoryVersion?.version ?? report?.version : report?.version,
+          contentHtml: content.innerHTML,
+        })
+      }}><FilePdf weight="bold" /><span>导出 PDF</span></button>
+    </div>
+  }
 
   const renderReport = () => (
     <div className="page-view page-report">
       <PageHeader
         title="上市分析报告"
         description="四个 Agent 完成协作与审校后，系统在这里呈现可继续编辑和交付的 Markdown 报告。"
-        action={<div className="report-header-actions">{report && <span className={`status-pill status-${report.audit_status}`}>{statusIcon(report.audit_status)}版本 {report.version} · {statusText(report.audit_status)}</span>}<button className="assistant-launch-button" onClick={() => setAssistantOpen(true)}><Headset weight="duotone" /><span><strong>客服 AI</strong><small>{report ? '解释或增量修改报告' : '报告生成后可用'}</small></span></button></div>}
+        action={<div className="report-header-actions">{report && <span className={`status-pill status-${report.audit_status}`}>{statusIcon(report.audit_status)}版本 {report.version} · {statusText(report.audit_status)}</span>}{renderReportExportActions('report')}<button className="assistant-launch-button" onClick={() => setAssistantSurface('decision')}><Headset weight="duotone" /><span><strong>客服 AI</strong><small>{report ? '解释或增量修改报告' : '报告生成后可用'}</small></span></button></div>}
       />
       {markdown ? (
         <section className="report-shell glass-panel">
@@ -1308,7 +1662,7 @@ function App() {
       <nav className="section-switcher" aria-label="运营决策子页面">
         <button className={decisionSection === 'strategy' ? 'active' : ''} aria-pressed={decisionSection === 'strategy'} onClick={() => setDecisionSection('strategy')}><Megaphone weight="duotone" /><span><strong>营销策略</strong><small>定位与上市动作</small></span></button>
         <button className={decisionSection === 'report' ? 'active' : ''} aria-pressed={decisionSection === 'report'} onClick={() => setDecisionSection('report')}><FileText weight="duotone" /><span><strong>决策报告</strong><small>Markdown 与版本</small></span></button>
-        <button className="assistant-tab" onClick={() => setAssistantOpen(true)}><Headset weight="duotone" /><span><strong>客服 AI</strong><small>解释 · 澄清 · 增量修改</small></span><i>{conversationId ? '会话中' : 'NEW'}</i></button>
+        <button className="assistant-tab" onClick={() => setAssistantSurface('decision')}><Headset weight="duotone" /><span><strong>客服 AI</strong><small>解释 · 澄清 · 增量修改</small></span><i>{conversationId ? '会话中' : 'NEW'}</i></button>
       </nav>
       {decisionSection === 'strategy' ? renderStrategy() : renderReport()}
       {renderCustomerService()}
@@ -1317,9 +1671,11 @@ function App() {
 
   const renderHistoryAgentPanel = () => (
     <aside className="history-agent-panel glass-panel" aria-labelledby="history-agent-title">
-      <header className="history-panel-heading agent-heading">
-        <span><Robot weight="duotone" /></span>
-        <div><h2 id="history-agent-title">报告修改助手</h2><p>提出修改要求后，系统会保留原文并生成新版本。</p></div>
+      <header className="history-panel-heading agent-heading assistant-drag-handle" onPointerDown={handleAssistantFloatDragStart}>
+        <div className="assistant-panel-heading-copy">
+          <span><Robot weight="duotone" /></span>
+          <div><h2 id="history-agent-title">报告修改助手</h2><p>提出修改要求后，系统会保留原文并生成新版本。</p></div>
+        </div>
       </header>
 
       {!report ? (
@@ -1358,11 +1714,30 @@ function App() {
     </aside>
   )
 
+  const renderHistoryAssistantFloating = () => assistantSurface !== 'history' ? null : createPortal(
+      <div
+        className={`history-assistant-float${assistantFloatSize ? ' is-resized' : ''}`}
+        ref={assistantFloatRef}
+        role="dialog"
+        aria-modal="false"
+        aria-labelledby="history-agent-title"
+        style={{
+          ...(assistantFloatPosition ? { left: `${assistantFloatPosition.x}px`, top: `${assistantFloatPosition.y}px`, right: 'auto' } : {}),
+          ...(assistantFloatSize ? { width: `${assistantFloatSize.width}px`, height: `${assistantFloatSize.height}px` } : {}),
+        }}
+      >
+        <button className="icon-button history-assistant-close" aria-label="关闭报告修改助手" onClick={() => setAssistantSurface(null)}><X weight="bold" /></button>
+        {renderHistoryAgentPanel()}
+        <div className="assistant-resize-handle" aria-hidden="true" onPointerDown={handleAssistantFloatResizeStart} />
+      </div>
+    , assistantPortalRoot ?? document.body,
+  )
+
   const renderHistoryWorkspace = () => (
     <div className="page-view page-history">
       <PageHeader
-        title="历史文档与智能修改"
-        description="集中保存每次分析生成的报告及其不可变版本，并通过客服 Agent 在证据边界内继续修改。"
+        title="历史记录"
+        description="查看报告版本、切换历史快照；需要修改时，通过右上角客服助手发起增量修改。"
         action={<button className="compact-button history-refresh" onClick={() => void refreshReportHistory(activeHistoryItem?.report_id)} disabled={historyBusy}><ArrowsClockwise className={historyBusy ? 'spin' : ''} weight="bold" />刷新记录</button>}
       />
 
@@ -1398,6 +1773,7 @@ function App() {
             <span><FileText weight="duotone" /></span>
             <div><h2 id="history-document-title">{activeHistoryItem?.product_name || '文档预览'}</h2><p>{activeHistoryItem ? `${activeHistoryItem.product_category || '未分类'} · ${activeHistoryItem.version_count} 个历史版本` : '选择左侧记录查看生成文档。'}</p></div>
             {report && <span className={`status-pill status-${report.audit_status}`}>{statusIcon(report.audit_status)}{statusText(report.audit_status)}</span>}
+            {renderReportExportActions('history')}
           </header>
 
           {!!historyVersions.length && <nav className="history-version-strip" aria-label="报告版本">
@@ -1409,8 +1785,6 @@ function App() {
             <article className="history-report-paper"><ReactMarkdown skipHtml>{markdown}</ReactMarkdown></article>
           </> : <div className="history-document-empty"><FileText weight="thin" /><strong>选择一份历史文档</strong><p>这里会显示对应版本的完整 Markdown 内容。</p></div>}
         </section>
-
-        {renderHistoryAgentPanel()}
       </section>
 
       <section className="history-archive glass-panel">
@@ -1430,13 +1804,13 @@ function App() {
   )
 
   const renderAuditHub = () => (
-    <div className="page-hub history-hub">{renderHistoryWorkspace()}</div>
+    <div className="page-hub history-hub">{renderHistoryWorkspace()}{renderHistoryAssistantFloating()}</div>
   )
 
   return (
     <>
       <a className="skip-link" href="#main-content">跳到主要内容</a>
-      <div className={`app-shell theme-${page} ${sidebarCollapsed ? 'sidebar-is-collapsed' : ''}`}>
+      <div className={`app-shell skin-${visualTheme} theme-${page} ${sidebarCollapsed ? 'sidebar-is-collapsed' : ''}`}>
         <div className={`theme-backdrop ${themeTransitioning ? 'is-transitioning' : ''}`} aria-hidden="true">
           <span className={`theme-bg-layer palette-${themeFrom}`} />
           <span className={`theme-bg-layer theme-bg-next palette-${themeTo}`} />
@@ -1460,7 +1834,7 @@ function App() {
           </nav>
 
           <div className="sidebar-foot">
-            <div className={`connection ${connected === false ? 'offline' : ''}`}><span className="connection-dot" /><div><strong>{connected === null ? '正在连接' : connected ? '系统在线' : '等待后端'}</strong><small>{connected ? 'Real 工作流已就绪' : '启动服务后即可分析'}</small></div></div>
+            <div className={`connection ${connected === false ? 'offline' : ''}`}><span className="connection-dot" /><div><strong>{connected === null ? '正在连接' : connected ? '系统在线' : '等待后端'}</strong><small>{connected ? '共享工作区已就绪' : '启动服务后即可分析'}</small></div></div>
           </div>
         </aside>
 
@@ -1468,7 +1842,12 @@ function App() {
           <header className="topbar">
             <button className="mobile-sidebar-toggle" onClick={() => setSidebarCollapsed((value) => !value)} aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}><SidebarSimple weight="bold" /></button>
             <div className="breadcrumb"><strong>{navigation.find((item) => item.key === page)?.label}</strong></div>
-            <div className="topbar-actions"><span className={`system-state ${connected === false ? 'offline' : ''}`}><i />{connected ? '系统可用' : connected === false ? '系统未连接' : '正在连接'}</span></div>
+            <div className="topbar-actions">
+              <span className="shared-workspace-label">内部演示 · 共享工作区</span>
+              <span className={`system-state ${connected === false ? 'offline' : ''}`}><i />{connected ? '系统可用' : connected === false ? '系统未连接' : '正在连接'}</span>
+              {page === 'audit' && <button className="topbar-icon-button" type="button" aria-label="打开报告修改助手" onClick={openHistoryAssistant}><Headset weight="duotone" /><span>客服</span></button>}
+              <button className="demo-logout-button" type="button" onClick={() => { clearSharedAccessCode(); onLogout() }}><SignOut weight="bold" />退出演示环境</button>
+            </div>
           </header>
           <div className={`content-stage content-stage-${page}`} key={page}>
             {page === 'workspace' && renderWorkspace()}
@@ -1478,9 +1857,140 @@ function App() {
           </div>
           <footer><div><strong>TradePilot</strong><span>基于多智能体的跨境商品智能运营决策助手</span></div><span>证据优先 · 过程透明 · 人机共决策</span></footer>
         </main>
+        <div className="assistant-portal-root" ref={setAssistantPortalRoot} />
       </div>
     </>
   )
+}
+
+function AccessGate({
+  onAuthenticated,
+  visualTheme,
+  onThemeChange,
+}: {
+  onAuthenticated: () => void
+  visualTheme: VisualTheme
+  onThemeChange: (theme: VisualTheme) => void
+}) {
+  const [accessCode, setAccessCode] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!accessCode.trim() || busy) return
+    setBusy(true)
+    setError('')
+    try {
+      await api.verifyAccess(accessCode)
+      saveSharedAccessCode(accessCode)
+      setAccessCode('')
+      onAuthenticated()
+    } catch (caught) {
+      setError(
+        caught instanceof ApiRequestError && caught.status === 401
+          ? '访问码无效或已失效，请重新输入。'
+          : '暂时无法连接演示环境，请稍后重试。',
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <main className={`access-gate skin-${visualTheme}`}>
+      <section className="access-card" aria-labelledby="access-title">
+        <div className="access-brand">
+          <span className="brand-logo-frame"><img src="/tradepilot-team-logo.png" alt="" /></span>
+          <span><strong>TradePilot</strong><small>Shared private staging</small></span>
+        </div>
+        <div className="access-heading">
+          <span><ShieldCheck weight="duotone" /></span>
+          <div><p>项目成员访问</p><h1 id="access-title">进入共享演示工作区</h1></div>
+        </div>
+        <p className="access-notice">内部演示环境，项目成员共享记录与记忆。</p>
+        <section className="access-theme-picker" aria-labelledby="theme-picker-title">
+          <div className="access-theme-picker-head">
+            <div>
+              <p id="theme-picker-title">Style mode</p>
+              <h2>Choose a visual theme before entering</h2>
+            </div>
+            <span>Palette only. Layout stays unchanged.</span>
+          </div>
+          <div className="theme-option-grid" role="list" aria-label="Visual theme options">
+            {visualThemeOptions.map((option) => {
+              const Icon = option.icon
+              const selected = visualTheme === option.value
+              return (
+                <div
+                  key={option.value}
+                  className={`theme-option-item ${option.previewClass} ${selected ? 'is-selected' : ''} ${option.available ? '' : 'is-disabled'}`}
+                >
+                  <button
+                    type="button"
+                    className="theme-option-circle"
+                    aria-pressed={selected}
+                    aria-label={option.label}
+                    title={`${option.label} · ${option.caption}`}
+                    disabled={!option.available}
+                    onClick={() => onThemeChange(option.value)}
+                  >
+                    <span className="theme-option-preview" aria-hidden="true">
+                      <img src={option.imageSrc} alt="" />
+                    </span>
+                    <span className="theme-option-icon"><Icon weight="duotone" /></span>
+                  </button>
+                  <span className="theme-option-copy">
+                    <span className="theme-option-title-row">
+                      <strong>{option.label}</strong>
+                      <em>{option.caption}</em>
+                    </span>
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+        <form onSubmit={submit}>
+          <label htmlFor="shared-access-code">共享访问码</label>
+          <input
+            id="shared-access-code"
+            type="password"
+            autoComplete="current-password"
+            value={accessCode}
+            onChange={(event) => setAccessCode(event.target.value)}
+            placeholder="请输入项目共享访问码"
+            autoFocus
+          />
+          {error && <p className="access-error" role="alert">{error}</p>}
+          <button className="primary-button" type="submit" disabled={busy || !accessCode.trim()}>
+            {busy ? <Pulse className="spin" weight="bold" /> : <ArrowRight weight="bold" />}
+            {busy ? '正在验证' : '进入演示环境'}
+          </button>
+        </form>
+        <p className="access-boundary">商品、Agent Run、Conversation、Memory、Upload 与 Report 对所有获准成员共享。</p>
+      </section>
+    </main>
+  )
+}
+
+function App() {
+  const [authenticated, setAuthenticated] = useState(hasSharedAccessCode)
+  const [visualTheme, setVisualTheme] = useState<VisualTheme>(readStoredVisualTheme)
+
+  useEffect(() => {
+    const handleAccessCleared = () => setAuthenticated(false)
+    window.addEventListener(ACCESS_CLEARED_EVENT, handleAccessCleared)
+    return () => window.removeEventListener(ACCESS_CLEARED_EVENT, handleAccessCleared)
+  }, [])
+
+  useEffect(() => {
+    window.localStorage.setItem(VISUAL_THEME_STORAGE_KEY, visualTheme)
+  }, [visualTheme])
+
+  return authenticated
+    ? <WorkspaceApp onLogout={() => setAuthenticated(false)} visualTheme={visualTheme} />
+    : <AccessGate onAuthenticated={() => setAuthenticated(true)} visualTheme={visualTheme} onThemeChange={setVisualTheme} />
 }
 
 export default App

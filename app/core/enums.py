@@ -68,6 +68,10 @@ class FileType(StrEnum):
 
 
 class ErrorCode(StrEnum):
+    UNAUTHORIZED = "unauthorized"
+    ANALYSIS_ALREADY_RUNNING = "analysis_already_running"
+    ANALYSIS_CAPACITY_REACHED = "analysis_capacity_reached"
+    ANALYSIS_RATE_LIMITED = "analysis_rate_limited"
     VALIDATION_ERROR = "validation_error"
     RESOURCE_NOT_FOUND = "resource_not_found"
     INVALID_RUN_STATE = "invalid_run_state"
