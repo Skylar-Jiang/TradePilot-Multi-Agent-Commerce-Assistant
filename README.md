@@ -1,8 +1,14 @@
-# TradePilot backend
+# TradePilot
 
 TradePilot analyzes an unlisted pet product by matching it to real listed peer products, then grounding market and user
 insights in peer metadata, SQL statistics, and peer-review RAG evidence. Real mode uses four LCEL Agents in one
 LangGraph workflow and never falls back to Demo or Mock.
+
+The repository contains the FastAPI backend at the root and the React/Vite dashboard in `frontend/`. The current
+hosted target is a **private shared staging workspace**: authorized members share products, analysis runs,
+conversations, reports, uploads, Chroma and peer caches. It is not a public production deployment. For the exact
+Railway/Vercel setup, persistent-volume layout, access-code policy, rollback and demo-data reset steps, see
+[`docs/deployment-guide.md`](docs/deployment-guide.md).
 
 ## Runtime contract
 
@@ -41,16 +47,20 @@ The application reads shared values from `.env`, then overlays `.env.<APP_ENV>`.
 `.env.production.example` to `.env.production` for production paths. Set `APP_ENV` in the process environment or
 shared `.env`; environment names are validated before a file path is constructed.
 
+For local Real mode, configure the required provider credentials only in ignored environment files. In Railway
+staging, also set a non-empty `APP_API_KEY`; users enter this shared access code in the browser, and it must never be
+placed in a `VITE_*` variable or committed to Git.
+
 ## Prepare real peer data offline
 
 ```powershell
 python scripts\prepare_peer_data.py
 ```
 
-This command scans product metadata and reviews only when the source signature is new or stale. It builds
-`data/demo/cache/product_catalog.sqlite` and `review_lookup.sqlite`. The catalog contains normalized lightweight
-metadata plus FTS; the review lookup stores source offsets/line numbers, not copied review text. It does not embed the
-full dataset and does not read or modify the full Chroma index.
+This command scans product metadata and reviews only when the source signature is new or stale. It builds lightweight
+catalog and review-lookup files under the configured `PEER_CACHE_DIR` (locally, `data/demo/cache`; in Railway staging,
+`/data/peer-cache`). The catalog contains normalized metadata plus FTS; the review lookup stores source offsets/line
+numbers, not copied review text. It does not embed the full dataset and does not read or modify the full Chroma index.
 
 The online `/analysis-runs` path only opens valid prepared caches. Missing or stale caches return
 `data_preparation_required`; online analysis never scans raw JSONL or rebuilds a cache.
@@ -81,6 +91,17 @@ matcher version, embedding model, and sorted final `selected_parent_asins`.
 
 ## Run
 
+For a classroom demonstration on Windows, double-click `start_demo.py` in the repository root (or run the command below).
+It automatically switches to `.venv`, starts the backend, creates the prepared Real-mode pet-fountain candidate,
+waits for its peer-group analysis and four Agents, then opens the final Markdown marketing report.
+
+```powershell
+.\.venv\Scripts\python.exe .\start_demo.py
+```
+
+The terminal prints the report, Swagger and run URLs; use `Ctrl+C` to stop the server. `--server-only` starts just
+Swagger, while `--no-browser` and `--port 8001` are available when needed.
+
 ```powershell
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
@@ -93,13 +114,19 @@ The React + TypeScript operations dashboard lives in `frontend`. Start the API f
 
 ```powershell
 Set-Location frontend
-npm install
+npm ci
 npm run dev
 ```
 
-Vite serves the dashboard at `http://127.0.0.1:5173` and proxies `/api/v1` to the local API. The UI covers product
+Vite serves the dashboard at `http://127.0.0.1:5173` and proxies `/api/v1` to the local API. For Vercel, set only
+`VITE_API_BASE_URL=https://<railway-domain>/api/v1`; the shared access code is entered at runtime and remains only in
+the current browser session. The UI covers product
 creation, optional file upload, four-Agent progress, timeline, audit results, and structured/Markdown reports. See
 `frontend/README.md` and `docs/frontend-implementation.md` for the design and integration details.
+
+In staging, `/api/v1/health` is the only anonymous application endpoint. All other `/api/v1/*` calls require
+`Authorization: Bearer <access-code>`; a 401 clears the browser session and returns the user to the access page.
+CORS limits browser origins but does not replace this authentication.
 
 Create a `data_mode=real` product with its name, description, features, parameters, scenarios, target species/users,
 target price, and optional uploaded image. `POST /api/v1/analysis-runs` returns `202` immediately; poll `/status` or
@@ -130,10 +157,15 @@ rebuild or Demo/Mock fallback occurs.
 python -m pip check
 python -m pytest -q
 python -m compileall -q app tests scripts
-python -m ruff check app tests scripts
+python -m ruff check .
 python scripts\smoke_test.py
+
+Set-Location frontend
+npm ci
+npm run build
 ```
 
 Real provider tests are opt-in so normal CI remains deterministic. The final HTTP E2E must be run with local secrets
 and `trust_env=False` when the workstation has an incompatible system proxy. See `docs/testing-guide.md` and
-`docs/handover/handover.md`.
+`docs/handover/handover.md`. Do not run a live Real-mode workflow unless its provider keys, Git LFS sources, prepared
+peer cache and RAG prerequisites have been verified; it can consume model-provider quota.

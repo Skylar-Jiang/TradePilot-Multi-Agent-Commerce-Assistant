@@ -25,7 +25,7 @@
 
 ## 3. Railway 后端 staging
 
-1. 新建 Railway Project 和 `staging` Environment，从 GitHub 导入当前分支。
+1. 新建 Railway Project 和 `staging` Environment，从 GitHub 导入本仓库的 `main` 分支。
 2. Service Root Directory 留空（仓库根），Config as Code 使用 `/railway.json`。
 3. Builder 为 Railpack；`railway.json` 的 build command 会实体化并校验两个 Git LFS 数据文件；启动命令为 `python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT`；健康检查为 `/api/v1/health`。
 4. Replica 数量固定为 `1`。SQLite、Chroma 和进程内准入锁均不支持这个阶段的多副本语义。
@@ -159,7 +159,7 @@ Remove-Variable accessCode
 
 | Vercel 字段 | 精确值 |
 | --- | --- |
-| Repository | 同一 TradePilot 仓库和当前 staging 分支 |
+| Repository | 同一 TradePilot 仓库的 `main` 分支 |
 | Root Directory | `frontend` |
 | Framework Preset | `Vite` |
 | Install Command | `npm ci` |
@@ -204,7 +204,7 @@ python scripts/seed_demo.py --profile generic_cross_border_demo
 
 ## 7. 回滚
 
-- 代码回滚：`git revert <this-commit>` 后推送 staging 分支；不要改写共享历史。
+- 代码回滚：`git revert <this-commit>` 后推送 `main`；不要改写共享历史。
 - Railway：重新部署上一个成功 commit。代码回滚不会自动降级 schema，也不会删除 Volume 数据。
 - Vercel：重新部署上一个成功 Preview；不要 Promote to Production。
 - 数据回滚：先保留当前 `/data` 快照，再从 `DEMO_BACKUP_DIR` 中选择明确备份恢复 SQLite、uploads 和 reports。不要在运行中的 worker 写数据库时覆盖文件。
