@@ -77,6 +77,7 @@ import {
 import { productCategoryOptions, targetMarketOptions } from './catalogOptions'
 import { clampAssistantFloatPosition, draggedAssistantFloatPosition, initialAssistantFloatPosition, resizedAssistantFloatSize } from './assistantFloat'
 import { downloadMarkdownReport, printReportDocument } from './reportExport'
+import { summarizeTimelineStage } from './timelineStages'
 
 type PageKey = 'workspace' | 'agents' | 'decision' | 'audit'
 type DecisionSection = 'strategy' | 'report'
@@ -917,6 +918,7 @@ function WorkspaceApp({
   }, [runId])
 
   const stageMap = useMemo(() => new Map(timeline.map((stage) => [stage.stage_key, stage])), [timeline])
+  const statisticsStage = useMemo(() => summarizeTimelineStage('statistics_provider', stageMap), [stageMap])
   const runActive = runId !== null && (runStatus === null || !terminalStatuses.includes(runStatus))
   const completedCount = timeline.filter((stage) => stage.status === 'succeeded').length
   const stageCount = workflow?.nodes.length || 8
@@ -1273,10 +1275,10 @@ function WorkspaceApp({
       <section className="workflow-canvas glass-panel" aria-labelledby="workflow-heading">
         <div className="workflow-title"><div><h2 id="workflow-heading">分析处理流程</h2></div><span className="flow-legend"><i /> 实时更新</span></div>
         <div className={`agent-flow ${runActive ? 'is-running' : ''}`}>
-          <div className={`prep-node status-${stageMap.get('statistics_provider')?.status || 'pending'}`}>
+          <div className={`prep-node status-${statisticsStage.status}`}>
             <span><Database weight="duotone" /></span>
             <div><strong>正在准备同类商品、用户评论和税则资料</strong></div>
-            <b>{statusIcon(stageMap.get('statistics_provider')?.status)}</b>
+            <b>{statusIcon(statisticsStage.status)}</b>
           </div>
           <div className="flow-line line-down"><i /></div>
           <div className="parallel-label"><span />并行执行<span /></div>
@@ -1325,9 +1327,8 @@ function WorkspaceApp({
         <div className="section-title"><div><h2>分析任务时间线</h2></div><span>{completedCount} / {stageCount} 项完成</span></div>
         <ol className="timeline-grid">
           {(workflow?.nodes || []).map((node) => {
-            const stage = stageMap.get(node.node_name)
-            const status = stage?.status || 'pending'
-            return <li className={`status-${status}`} key={node.node_name}><span>{statusIcon(status)}</span><div><strong>{node.display_name}</strong><small>{node.responsibility}</small></div><time>{formatDuration(stage?.duration_ms)}</time></li>
+            const stage = summarizeTimelineStage(node.node_name, stageMap)
+            return <li className={`status-${stage.status}`} key={node.node_name}><span>{statusIcon(stage.status)}</span><div><strong>{node.display_name}</strong><small>{node.responsibility}</small></div><time>{formatDuration(stage.duration_ms)}</time></li>
           })}
         </ol>
         {!workflow && <div className="empty-inline">连接后端后将加载完整工作流。</div>}

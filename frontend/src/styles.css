@@ -1044,7 +1044,7 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--blue
 .assistant-launch-button > span { display: flex; flex-direction: column; gap: 3px; text-align: left; }
 .assistant-launch-button strong { font-size: 12px; }
 .assistant-launch-button small { color: var(--ink-muted); font-size: 9px; }
-.assistant-scrim { position: fixed; z-index: 490; inset: 0; width: 100%; height: 100%; background: rgba(1,7,15,.6); backdrop-filter: blur(5px); animation: scrim-in 180ms ease-out both; }
+.assistant-scrim { position: fixed; z-index: 490; inset: 0; width: 100%; height: 100%; background: transparent; }
 .customer-service-drawer {
   position: fixed;
   z-index: 500;
@@ -1062,7 +1062,6 @@ input:focus, textarea:focus, select:focus { outline: 0; border-color: var(--blue
   box-shadow: -30px 0 90px rgba(0,0,0,.46), inset 0 1px rgba(255,255,255,.04);
   animation: assistant-sheet-in 240ms var(--ease) both;
 }
-@keyframes scrim-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes assistant-sheet-in { from { opacity: 0; transform: translateY(-10px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 .customer-service-head { display: grid; grid-template-columns: 52px minmax(0,1fr) 44px; gap: 13px; align-items: start; padding: 20px; border-bottom: 1px solid var(--line); background: linear-gradient(120deg,var(--page-accent-soft),transparent 62%); }
 .customer-service-avatar { display: grid; width: 52px; height: 52px; place-items: center; border: 1px solid color-mix(in srgb,var(--page-accent) 32%,transparent); border-radius: 15px; color: var(--page-accent); background: var(--page-accent-soft); }
@@ -5056,12 +5055,6 @@ body.assistant-dragging * {
 .app-shell:is(.skin-snow, .skin-petal, .skin-linen, .skin-midnight) .history-assistant-float .customer-message > span {
   color: var(--theme-text);
   background: var(--theme-surface-strong);
-}
-
-/* The report assistant is a compact collaboration sheet, not a full-height drawer. */
-.app-shell:is(.skin-snow, .skin-petal, .skin-linen, .skin-midnight) .assistant-scrim {
-  background: rgba(24, 24, 27, 0.2);
-  backdrop-filter: blur(2px);
 }
 
 .app-shell:is(.skin-snow, .skin-petal, .skin-linen, .skin-midnight) .customer-service-drawer {
