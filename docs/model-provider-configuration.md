@@ -149,7 +149,7 @@ Usually means one of these is missing:
 - `MODEL_ANALYSIS`
 - `MODEL_FAST`
 - `MODEL_REPORT`
-- `MODEL_CUSTOMER_SERVICE` (optional; defaults to `MODEL_REPORT` and is used only for real-report customer-service explanations)
+- `MODEL_CUSTOMER_SERVICE` (optional; defaults to `MODEL_REPORT` and is used for customer-service explanations)
 
 or the fallback OpenAI-compatible text configuration is incomplete.
 

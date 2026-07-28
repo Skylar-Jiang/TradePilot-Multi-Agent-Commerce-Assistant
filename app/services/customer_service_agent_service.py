@@ -16,10 +16,9 @@ from app.core.enums import (
     CustomerServiceAction,
     CustomerServiceIntent,
     CustomerServicePersonality,
-    DataOrigin,
     ErrorCode,
 )
-from app.core.exceptions import LLMNotConfiguredError, ResourceNotFoundError, TradePilotError
+from app.core.exceptions import ResourceNotFoundError, TradePilotError
 from app.db.repositories.sqlalchemy import SqlAlchemyAnalysisRepository
 from app.schemas.common import utc_now
 from app.schemas.customer_service import (
@@ -851,12 +850,7 @@ class CustomerServiceAgentService:
         conversation_id: str,
         grounded_answer: str,
     ) -> str:
-        if report.data_origin is not DataOrigin.REAL:
-            return grounded_answer
-        try:
-            model = self.model or create_customer_service_model()
-        except LLMNotConfiguredError:
-            return grounded_answer
+        model = self.model or create_customer_service_model()
 
         section_key = next(
             (key for key, descriptor in report.section_index.items() if descriptor.section_id == section_id),
@@ -882,8 +876,12 @@ class CustomerServiceAgentService:
             reply = self._model_response_text(response)
             return reply or grounded_answer
         except Exception:
-            logger.warning("customer-service model explanation failed; using evidence-grounded response", exc_info=True)
-            return grounded_answer
+            logger.exception("customer-service model explanation failed")
+            raise TradePilotError(
+                ErrorCode.WORKFLOW_FAILED,
+                "Customer-service model request failed; check Railway model configuration and logs",
+                503,
+            ) from None
 
     def _conversation_history(self, conversation_id: str) -> str:
         try:

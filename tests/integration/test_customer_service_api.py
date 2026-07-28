@@ -1,4 +1,12 @@
+from types import SimpleNamespace
+
+from app.services import customer_service_agent_service
 from tests.integration.test_report_support_api import _client, _report_id
+
+
+class _CustomerServiceModel:
+    def invoke(self, _prompt):  # type: ignore[no-untyped-def]
+        return SimpleNamespace(content="模型已基于完整报告上下文给出解释。")
 
 
 def _run_customer_service_update(client, report_id: str, message: str, personality: str = "professional"):  # type: ignore[no-untyped-def]
@@ -33,7 +41,12 @@ def _assert_common_targeted_regeneration(payload, versions, conversation) -> Non
     assert conversation.status_code == 200
 
 
-def test_customer_service_explain_returns_same_report_and_history(tmp_path) -> None:  # type: ignore[no-untyped-def]
+def test_customer_service_explain_returns_same_report_and_history(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setattr(
+        customer_service_agent_service,
+        "create_customer_service_model",
+        lambda: _CustomerServiceModel(),
+    )
     with _client(tmp_path) as client:
         report_id = _report_id(client)
         response = client.post(
@@ -52,12 +65,7 @@ def test_customer_service_explain_returns_same_report_and_history(tmp_path) -> N
     assert payload["action_taken"] == "explain"
     assert payload["report_id"] == report_id
     assert payload["changed_section_ids"] == []
-    assert "第 1 版报告" in payload["reply"]
-    assert "可追溯证据" in payload["reply"]
-    assert "Report version" not in payload["reply"]
-    assert "succeeded" not in payload["reply"]
-    assert "\n1. user" not in payload["reply"]
-    assert "\n3. production" not in payload["reply"]
+    assert "模型已基于完整报告上下文给出解释。" in payload["reply"]
     assert conversation.status_code == 200
     assert conversation.json()["data"]["personality"] == "simple"
     assert [item["role"] for item in conversation.json()["data"]["messages"]] == ["user", "assistant"]
