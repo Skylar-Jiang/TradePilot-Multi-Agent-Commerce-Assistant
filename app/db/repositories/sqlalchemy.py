@@ -480,6 +480,57 @@ class SqlAlchemyAnalysisRepository:
         self.session.commit()
         return report
 
+    def delete_report_version(self, report_id: str) -> tuple[FinalReport, FinalReport | None]:
+        record = self.session.get(Report, report_id)
+        if record is None:
+            raise ResourceNotFoundError("report", report_id)
+        deleted_report = FinalReport.model_validate(record.metadata_json)
+        run = self.session.get(AnalysisRun, record.run_id)
+        if run is None:
+            raise ResourceNotFoundError("analysis_run", record.run_id)
+        self.session.delete(record)
+        self.session.flush()
+        latest_record = self.session.scalar(
+            select(Report).where(Report.run_id == run.run_id).order_by(Report.version.desc()).limit(1)
+        )
+        latest_report = (
+            FinalReport.model_validate(latest_record.metadata_json) if latest_record is not None else None
+        )
+        self._set_run_report(run, latest_report)
+        self.session.commit()
+        return deleted_report, latest_report
+
+    def clear_report_history(self) -> list[FinalReport]:
+        records = self.session.scalars(select(Report)).all()
+        reports = [FinalReport.model_validate(record.metadata_json) for record in records]
+        run_ids = {record.run_id for record in records}
+        for run_id in run_ids:
+            run = self.session.get(AnalysisRun, run_id)
+            if run is not None:
+                self._set_run_report(run, None)
+        self.session.execute(delete(Report))
+        self.session.commit()
+        return reports
+
+    @staticmethod
+    def _set_run_report(run: AnalysisRun, report: FinalReport | None) -> None:
+        state = dict(run.state_json)
+        if report is None:
+            run.report_id = None
+            for key in ("report_id", "report_version", "report_paths"):
+                state.pop(key, None)
+        else:
+            run.report_id = report.report_id
+            state.update(
+                {
+                    "report_id": report.report_id,
+                    "report_version": report.version,
+                    "report_paths": {"json": report.json_path, "markdown": report.markdown_path},
+                }
+            )
+        run.state_json = state
+        run.updated_at = datetime.now(UTC)
+
     @staticmethod
     def _to_run(record: AnalysisRun) -> AnalysisRunRead:
         return AnalysisRunRead(

@@ -381,6 +381,16 @@ def list_report_history(request: Request, session: DbSession):  # type: ignore[n
     return success(request, {"total": len(reports), "reports": reports})
 
 
+@router.delete(
+    "/reports",
+    summary="Delete all persisted report history while preserving products and knowledge",
+    response_model=ApiResponse[dict[str, int]],
+    responses=API_ERROR_RESPONSES,
+)
+def clear_report_history(request: Request, session: DbSession):  # type: ignore[no-untyped-def]
+    return success(request, ReportSupportService(session).clear_history())
+
+
 @router.get(
     "/reports/{report_id}",
     summary="Get a structured TradePilot report",
@@ -390,6 +400,16 @@ def list_report_history(request: Request, session: DbSession):  # type: ignore[n
 def get_report(request: Request, report_id: str, session: DbSession):  # type: ignore[no-untyped-def]
     report = analysis_service(request, session).get_report(report_id)
     return success(request, report, data_mode="demo" if report.is_demo else "real")
+
+
+@router.delete(
+    "/reports/{report_id}",
+    summary="Delete one report version without renumbering the remaining history",
+    response_model=ApiResponse[dict[str, object]],
+    responses=API_ERROR_RESPONSES,
+)
+def delete_report_version(request: Request, report_id: str, session: DbSession):  # type: ignore[no-untyped-def]
+    return success(request, ReportSupportService(session).delete_version(report_id))
 
 
 @router.get(

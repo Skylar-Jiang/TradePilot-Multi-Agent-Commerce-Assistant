@@ -40,6 +40,7 @@ import {
   Sparkle,
   Heartbeat,
   Target,
+  Trash,
   UploadSimple,
   UsersThree,
   WarningCircle,
@@ -1026,6 +1027,54 @@ function WorkspaceApp({
     }
   }
 
+  const clearHistoryPreview = () => {
+    localStorage.removeItem('tradepilot-last-report-id')
+    setReport(null)
+    setMarkdown('')
+    setReportHistory([])
+    setHistoryVersions([])
+    setActiveHistoryRunId(null)
+    setSelectedVersionReportId(null)
+    setConversationId(null)
+    setCustomerMessages([])
+    setCustomerResult(null)
+    setCustomerError('')
+    setAssistantSurface(null)
+  }
+
+  const deleteHistoryVersion = async (version: ReportVersionSummary) => {
+    if (historyBusy || !window.confirm(`删除 V${version.version}？此操作会删除该版本的报告与导出文件，且无法恢复。其余版本不会重新编号。`)) return
+    setHistoryBusy(true)
+    setHistoryError('')
+    try {
+      const result = await api.deleteReportVersion(version.report_id)
+      if (!result.latest_report_id) {
+        clearHistoryPreview()
+        await refreshReportHistory()
+        return
+      }
+      await refreshReportHistory(result.latest_report_id, true)
+    } catch (deleteError) {
+      setHistoryError(deleteError instanceof Error ? deleteError.message : '删除报告版本失败。')
+    } finally {
+      setHistoryBusy(false)
+    }
+  }
+
+  const clearAllReportHistory = async () => {
+    if (historyBusy || !window.confirm('清空所有商品的报告历史？这会删除全部报告版本及其导出文件，无法恢复；商品、上传文件、分析输入和共享记忆会保留。')) return
+    setHistoryBusy(true)
+    setHistoryError('')
+    try {
+      await api.clearReportHistory()
+      clearHistoryPreview()
+    } catch (deleteError) {
+      setHistoryError(deleteError instanceof Error ? deleteError.message : '清空历史记录失败。')
+    } finally {
+      setHistoryBusy(false)
+    }
+  }
+
   const refreshCustomerConversation = async (reportId: string, nextConversationId: string) => {
     const conversation = await api.customerServiceConversation(reportId, nextConversationId)
     setConversationId(conversation.conversation_id)
@@ -1739,7 +1788,7 @@ function WorkspaceApp({
       <PageHeader
         title="历史记录"
         description="查看报告版本、切换历史快照；需要修改时，通过右上角客服助手发起增量修改。"
-        action={<button className="compact-button history-refresh" onClick={() => void refreshReportHistory(activeHistoryItem?.report_id)} disabled={historyBusy}><ArrowsClockwise className={historyBusy ? 'spin' : ''} weight="bold" />刷新记录</button>}
+        action={<div className="history-page-actions"><button className="compact-button history-refresh" onClick={() => void refreshReportHistory(activeHistoryItem?.report_id)} disabled={historyBusy}><ArrowsClockwise className={historyBusy ? 'spin' : ''} weight="bold" />刷新记录</button><button className="compact-button history-clear-all" onClick={() => void clearAllReportHistory()} disabled={historyBusy || !reportHistory.length}><Trash weight="bold" />清空全部</button></div>}
       />
 
       <section className="history-statbar" aria-label="历史文档统计">
@@ -1778,7 +1827,7 @@ function WorkspaceApp({
           </header>
 
           {!!historyVersions.length && <nav className="history-version-strip" aria-label="报告版本">
-            {historyVersions.map((version) => <button type="button" className={version.report_id === selectedVersionReportId ? 'active' : ''} aria-pressed={version.report_id === selectedVersionReportId} key={version.report_id} onClick={() => void selectHistoryVersion(version.report_id)}><span>V{version.version}</span><small>{version.version === activeHistoryItem?.version ? '最新' : formatHistoryDate(version.created_at)}</small></button>)}
+            {historyVersions.map((version) => <div className="history-version-item" key={version.report_id}><button type="button" className={version.report_id === selectedVersionReportId ? 'active' : ''} aria-pressed={version.report_id === selectedVersionReportId} onClick={() => void selectHistoryVersion(version.report_id)}><span>V{version.version}</span><small>{version.version === activeHistoryItem?.version ? '最新' : formatHistoryDate(version.created_at)}</small></button><button type="button" className="history-version-delete" aria-label={`删除 V${version.version}`} title={`删除 V${version.version}`} onClick={() => void deleteHistoryVersion(version)} disabled={historyBusy}><Trash weight="bold" /></button></div>)}
           </nav>}
 
           {markdown ? <>

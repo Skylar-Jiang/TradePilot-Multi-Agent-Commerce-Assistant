@@ -274,7 +274,17 @@ export const api = {
   audit: (runId: string) =>
     request<{ run_id: string; audit: AuditResult | null }>(`/analysis-runs/${runId}/audit`),
   reportHistory: () => request<{ total: number; reports: ReportHistoryItem[] }>('/reports'),
+  clearReportHistory: () => request<{ deleted_report_count: number; deleted_file_count: number }>('/reports', {
+    method: 'DELETE',
+  }),
   report: (reportId: string) => request<ReportView>(`/reports/${reportId}`),
+  deleteReportVersion: (reportId: string) => request<{
+    deleted_report_id: string
+    run_id: string
+    remaining_version_count: number
+    latest_report_id: string | null
+    deleted_file_count: number
+  }>(`/reports/${encodeURIComponent(reportId)}`, { method: 'DELETE' }),
   reportVersions: (reportId: string) =>
     request<{ run_id: string; versions: ReportVersionSummary[] }>(`/reports/${reportId}/versions`),
   customerServiceMessage: (

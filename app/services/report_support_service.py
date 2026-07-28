@@ -128,6 +128,24 @@ class ReportSupportService:
     def history(self) -> list[dict[str, Any]]:
         return self.reports.list_report_history()
 
+    def delete_version(self, report_id: str) -> dict[str, Any]:
+        deleted, latest = self.reports.delete_report_version(report_id)
+        deleted_file_count = self._delete_files([deleted])
+        return {
+            "deleted_report_id": deleted.report_id,
+            "run_id": deleted.run_id,
+            "remaining_version_count": len(self.reports.list_report_versions(deleted.run_id)),
+            "latest_report_id": latest.report_id if latest else None,
+            "deleted_file_count": deleted_file_count,
+        }
+
+    def clear_history(self) -> dict[str, int]:
+        reports = self.reports.clear_report_history()
+        return {
+            "deleted_report_count": len(reports),
+            "deleted_file_count": self._delete_files(reports),
+        }
+
     def _explain(
         self,
         report: FinalReport,
@@ -392,6 +410,21 @@ class ReportSupportService:
             ReportExporter._markdown_with_anchors(report),
             encoding="utf-8",
         )
+
+    @staticmethod
+    def _delete_files(reports: list[FinalReport]) -> int:
+        deleted = 0
+        for report in reports:
+            for path in (report.json_path, report.markdown_path):
+                report_file = Path(path)
+                if not report_file.is_file():
+                    continue
+                try:
+                    report_file.unlink()
+                    deleted += 1
+                except OSError:
+                    continue
+        return deleted
 
     @staticmethod
     def _reject(message: str) -> None:
