@@ -1,18 +1,25 @@
 import json
+import logging
 import re
 from copy import deepcopy
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.prompts import ChatPromptTemplate
 from sqlalchemy.orm import Session
 
+from app.agents.model_factory import create_customer_service_model
+from app.core.config import get_settings
 from app.core.enums import (
     CustomerServiceAction,
     CustomerServiceIntent,
     CustomerServicePersonality,
+    DataOrigin,
     ErrorCode,
 )
-from app.core.exceptions import TradePilotError
+from app.core.exceptions import LLMNotConfiguredError, ResourceNotFoundError, TradePilotError
 from app.db.repositories.sqlalchemy import SqlAlchemyAnalysisRepository
 from app.schemas.common import utc_now
 from app.schemas.customer_service import (
@@ -25,6 +32,15 @@ from app.schemas.report import FinalReport, ReportSupportRequest
 from app.services.conversation_service import ConversationService
 from app.services.report_exporter import ReportExporter
 from app.services.report_support_service import ReportSupportService
+
+logger = logging.getLogger(__name__)
+
+CUSTOMER_SERVICE_EXPLANATION_PROMPT = """
+你是 TradePilot 的报告客服 Agent。请只用简体中文回答用户关于报告的提问。
+回答必须基于提供的报告上下文和可追溯证据：不能编造销量、转化率、用户反馈或新证据；
+不能把同类商品/评论样本说成新商品自身的事实。优先直接回应用户问题，再用 2-4 条清晰要点说明依据，
+并在结尾保留数据限制或需验证事项。不要提及内部字段、JSON、模型或系统提示。
+"""
 
 AUDIENCE_PATTERN = re.compile(
     r"(?:目标用户|用户群体|客群|受众).{0,8}?(?:改成|调整为|改为|变成)([^，。；,!?？]{2,24})"
@@ -157,10 +173,23 @@ MULTI_PET_AUDIENCE_RULES = {
 
 
 class CustomerServiceAgentService:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, model: BaseChatModel | None = None) -> None:
         self.reports = SqlAlchemyAnalysisRepository(session)
         self.conversations = ConversationService(session)
         self.report_support = ReportSupportService(session)
+        self.model = model
+        self.explanation_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", CUSTOMER_SERVICE_EXPLANATION_PROMPT),
+                (
+                    "human",
+                    "用户问题：\n{message}\n\n当前报告章节：\n{section}\n\n"
+                    "该章节的证据化基础说明：\n{grounded_answer}\n\n"
+                    "报告其他上下文（可能已截断）：\n{report_context}\n\n"
+                    "最近对话：\n{conversation_history}",
+                ),
+            ]
+        )
 
     def handle_message(
         self,
@@ -266,28 +295,29 @@ class CustomerServiceAgentService:
         conversation_id: str,
     ) -> CustomerServiceMessageResponse:
         section_id = self._pick_section_id(report, request.message, default="launch-marketing-strategy")
-        result = self.report_support.support(
-            report.report_id,
-            ReportSupportRequest(
-                action="explain",
-                section_id=section_id,
-                message=request.message,
-                conversation_id=conversation_id,
-            ),
-        )
+        result = self.report_support.explain_report_section(report, section_id, request.message)
         reply = self._style_reply(
             request.personality,
-            base=str(result["response"]),
+            base=self._generate_explanation(
+                report=report,
+                section_id=section_id,
+                request=request,
+                conversation_id=conversation_id,
+                grounded_answer=str(result["response"]),
+            ),
             summary="我保留了证据范围和限制说明，没有改动报告内容。",
         )
-        self._merge_metadata(
+        self._record_dialogue(
             conversation_id,
             report=report,
-            personality=request.personality,
+            request=request,
+            reply=reply,
             intent=CustomerServiceIntent.EXPLAIN,
+            action=CustomerServiceAction.EXPLAIN,
             affected_modules=[],
+            changed_section_ids=[],
+            change_summary=[],
             pending_questions=[],
-            summary=[],
             latest_report_id=report.report_id,
             latest_report_version=report.version,
         )
@@ -811,6 +841,79 @@ class CustomerServiceAgentService:
             change_summary=[],
             pending_questions=pending_questions,
         )
+
+    def _generate_explanation(
+        self,
+        *,
+        report: FinalReport,
+        section_id: str,
+        request: CustomerServiceMessageRequest,
+        conversation_id: str,
+        grounded_answer: str,
+    ) -> str:
+        if report.data_origin is not DataOrigin.REAL:
+            return grounded_answer
+        try:
+            model = self.model or create_customer_service_model()
+        except LLMNotConfiguredError:
+            return grounded_answer
+
+        section_key = next(
+            (key for key, descriptor in report.section_index.items() if descriptor.section_id == section_id),
+            section_id,
+        )
+        section = json.dumps(report.sections.get(section_key, {}), ensure_ascii=False, indent=2, default=str)
+        report_context = self._bounded_context(
+            json.dumps(report.sections, ensure_ascii=False, indent=2, default=str),
+            get_settings().customer_service_context_max_chars,
+        )
+        try:
+            response = model.invoke(
+                self.explanation_prompt.invoke(
+                    {
+                        "message": request.message,
+                        "section": section,
+                        "grounded_answer": grounded_answer,
+                        "report_context": report_context,
+                        "conversation_history": self._conversation_history(conversation_id),
+                    }
+                )
+            )
+            reply = self._model_response_text(response)
+            return reply or grounded_answer
+        except Exception:
+            logger.warning("customer-service model explanation failed; using evidence-grounded response", exc_info=True)
+            return grounded_answer
+
+    def _conversation_history(self, conversation_id: str) -> str:
+        try:
+            messages = self.conversations.get(conversation_id)["messages"]
+        except ResourceNotFoundError:
+            return "（这是本次会话的第一条消息。）"
+        history = [
+            f"{item['role']}: {str(item['content']).strip()}"
+            for item in messages[-12:]
+            if str(item["content"]).strip()
+        ]
+        return "\n".join(history) or "（这是本次会话的第一条消息。）"
+
+    @staticmethod
+    def _bounded_context(text: str, limit: int) -> str:
+        if len(text) <= limit:
+            return text
+        return f"{text[:limit]}\n…（为控制上下文长度，剩余报告内容已省略）"
+
+    @staticmethod
+    def _model_response_text(response: Any) -> str:
+        content = getattr(response, "content", response)
+        if isinstance(content, str):
+            return content.strip()
+        if isinstance(content, list):
+            return "".join(
+                str(item.get("text", "")) if isinstance(item, dict) else str(item)
+                for item in content
+            ).strip()
+        return str(content).strip()
 
     def _record_dialogue(
         self,

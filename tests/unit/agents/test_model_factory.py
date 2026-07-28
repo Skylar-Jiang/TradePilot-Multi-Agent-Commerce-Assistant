@@ -50,6 +50,29 @@ def test_qwen_models_disable_thinking_for_structured_output(monkeypatch) -> None
     assert client_options["trust_env"] is False
 
 
+def test_customer_service_model_uses_the_long_context_report_model_without_json_mode(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    captured: dict[str, object] = {}
+
+    def fake_chat_openai(**kwargs):  # type: ignore[no-untyped-def]
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(model_factory, "ChatOpenAI", fake_chat_openai)
+    monkeypatch.setattr(model_factory.httpx, "Client", lambda **_kwargs: object())
+    settings = Settings(
+        _env_file=None,
+        qwen_api_key="test-key",
+        model_report="qwen3.7-plus",
+        model_customer_service="qwen3.7-plus",
+    )
+
+    model_factory.create_customer_service_model(settings)
+
+    assert captured["model"] == "qwen3.7-plus"
+    assert "model_kwargs" not in captured
+    assert captured["extra_body"] == {"enable_thinking": False}
+
+
 def test_mixed_provider_routes_each_model_role_by_configured_provider(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     created: list[dict[str, object]] = []
 

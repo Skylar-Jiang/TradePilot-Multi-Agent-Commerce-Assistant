@@ -58,7 +58,7 @@ class ReportSupportService:
         )
         try:
             result = (
-                self._explain(report, section_key, request.section_id, request.message)
+                self.explain_report_section(report, request.section_id, request.message, section_key=section_key)
                 if request.action == "explain"
                 else self._edit(report, section_key, request)
             )
@@ -90,6 +90,21 @@ class ReportSupportService:
             },
         )
         return result
+
+    def explain_report_section(
+        self,
+        report: FinalReport,
+        section_id: str,
+        message: str,
+        *,
+        section_key: str | None = None,
+    ) -> dict[str, Any]:
+        return self._explain(
+            report,
+            section_key or self._section_key(report, section_id),
+            section_id,
+            message,
+        )
 
     def rollback(self, report_id: str, *, target_version: int, reason: str) -> FinalReport:
         current = self.reports.get_report(report_id)
@@ -228,6 +243,10 @@ class ReportSupportService:
     @classmethod
     def _readable_texts(cls, value: Any, *, limit: int) -> list[str]:
         ignored_keys = {
+            "status",
+            "data_origin",
+            "implementation_status",
+            "scaffold_note",
             "evidence_id",
             "evidence_ids",
             "source_uri",

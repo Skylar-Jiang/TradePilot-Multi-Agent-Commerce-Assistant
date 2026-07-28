@@ -55,9 +55,13 @@ def test_customer_service_explain_returns_same_report_and_history(tmp_path) -> N
     assert "第 1 版报告" in payload["reply"]
     assert "可追溯证据" in payload["reply"]
     assert "Report version" not in payload["reply"]
+    assert "succeeded" not in payload["reply"]
+    assert "\n1. user" not in payload["reply"]
+    assert "\n3. production" not in payload["reply"]
     assert conversation.status_code == 200
     assert conversation.json()["data"]["personality"] == "simple"
     assert [item["role"] for item in conversation.json()["data"]["messages"]] == ["user", "assistant"]
+    assert conversation.json()["data"]["messages"][-1]["content"] == payload["reply"]
 
 
 def test_customer_service_targeted_regeneration_creates_student_focused_new_report_version(

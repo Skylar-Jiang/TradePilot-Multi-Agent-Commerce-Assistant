@@ -91,6 +91,50 @@ def create_operations_model(settings: Settings | None = None) -> BaseChatModel:
         )
 
 
+def create_customer_service_model(settings: Settings | None = None) -> BaseChatModel:
+    """Create the report-oriented chat model without forcing JSON output."""
+    resolved = settings or get_settings()
+    model_name = resolved.model_customer_service or resolved.model_report
+    if resolved.qwen_api_key and model_name:
+        logger.info("creating customer-service model", extra={"model_name": model_name, "provider": "qwen"})
+        return ChatOpenAI(
+            model=model_name,
+            base_url=resolved.qwen_base_url,
+            api_key=resolved.qwen_api_key,
+            temperature=resolved.model_temperature,
+            timeout=resolved.model_timeout_seconds,
+            max_retries=resolved.model_max_retries,
+            max_tokens=resolved.model_max_tokens,
+            extra_body={"enable_thinking": False},
+            http_client=httpx.Client(trust_env=False),
+        )
+    if resolved.deepseek_api_key and model_name:
+        logger.info("creating customer-service model", extra={"model_name": model_name, "provider": "deepseek"})
+        return ChatOpenAI(
+            model=model_name,
+            base_url=resolved.deepseek_base_url,
+            api_key=resolved.deepseek_api_key,
+            temperature=resolved.model_temperature,
+            timeout=resolved.model_timeout_seconds,
+            max_retries=resolved.model_max_retries,
+            max_tokens=resolved.model_max_tokens,
+            extra_body={"thinking": {"type": "disabled"}},
+        )
+    if resolved.openai_api_key and (resolved.model_customer_service or resolved.model_analysis):
+        return ChatOpenAI(
+            model=resolved.model_customer_service or resolved.model_analysis,
+            base_url=resolved.openai_base_url,
+            api_key=resolved.openai_api_key,
+            temperature=resolved.model_temperature,
+            timeout=resolved.model_timeout_seconds,
+            max_retries=resolved.model_max_retries,
+            max_tokens=resolved.model_max_tokens,
+        )
+    raise LLMNotConfiguredError(
+        "Customer-service Agent requires DEEPSEEK_API_KEY or QWEN_API_KEY, plus MODEL_CUSTOMER_SERVICE or MODEL_REPORT"
+    )
+
+
 def create_audit_model(settings: Settings | None = None) -> BaseChatModel:
     resolved = settings or get_settings()
     if resolved.qwen_api_key and resolved.model_fast:

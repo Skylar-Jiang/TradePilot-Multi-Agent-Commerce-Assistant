@@ -629,7 +629,7 @@ function WorkspaceApp({
   }, [assistantSurface, page])
 
   useEffect(() => {
-    if (assistantSurface !== 'history') {
+    if (!assistantSurface) {
       assistantDragRef.current = null
       assistantResizeRef.current = null
       document.body.classList.remove('assistant-dragging')
@@ -737,6 +737,7 @@ function WorkspaceApp({
 
   const handleAssistantFloatDragStart = useCallback((event: ReactPointerEvent<HTMLElement>) => {
     if (window.innerWidth <= 720 || !event.isPrimary || event.button !== 0) return
+    if (event.target instanceof Element && event.target.closest('button, input, textarea')) return
     const panel = assistantFloatRef.current
     if (!panel) return
     event.preventDefault()
@@ -796,6 +797,22 @@ function WorkspaceApp({
       setAssistantFloatPosition(position)
     }
     setAssistantSurface('history')
+  }, [])
+
+  const openDecisionAssistant = useCallback(() => {
+    if (window.innerWidth > 720 && !assistantFloatPositionRef.current) {
+      const panelWidth = assistantFloatSizeRef.current?.width ?? Math.min(520, window.innerWidth - 32)
+      const panelHeight = assistantFloatSizeRef.current?.height ?? Math.min(680, window.innerHeight - 128)
+      const position = initialAssistantFloatPosition({
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        panelWidth,
+        panelHeight,
+      })
+      assistantFloatPositionRef.current = position
+      setAssistantFloatPosition(position)
+    }
+    setAssistantSurface('decision')
   }, [])
 
   useEffect(() => {
@@ -1600,8 +1617,18 @@ function WorkspaceApp({
   const renderCustomerService = () => assistantSurface !== 'decision' ? null : createPortal(
     <>
       <button className="assistant-scrim" aria-label="关闭客服 AI" onClick={() => setAssistantSurface(null)} />
-      <aside className="customer-service-drawer" role="dialog" aria-modal="false" aria-labelledby="customer-service-title">
-        <header className="customer-service-head">
+      <aside
+        className={`customer-service-drawer customer-service-float${assistantFloatSize ? ' is-resized' : ''}`}
+        ref={assistantFloatRef}
+        role="dialog"
+        aria-modal="false"
+        aria-labelledby="customer-service-title"
+        style={{
+          ...(assistantFloatPosition ? { left: `${assistantFloatPosition.x}px`, top: `${assistantFloatPosition.y}px`, right: 'auto' } : {}),
+          ...(assistantFloatSize ? { width: `${assistantFloatSize.width}px`, height: `${assistantFloatSize.height}px` } : {}),
+        }}
+      >
+        <header className="customer-service-head assistant-drag-handle" onPointerDown={handleAssistantFloatDragStart}>
           <span className="customer-service-avatar"><Robot weight="duotone" /></span>
           <div><h2 id="customer-service-title">报告客服 AI</h2><p>解释报告结论，并按照你的要求修改指定内容。</p></div>
           <button className="icon-button" aria-label="关闭客服 AI" onClick={() => setAssistantSurface(null)}><X weight="bold" /></button>
@@ -1643,6 +1670,7 @@ function WorkspaceApp({
             </form>
           </>
         )}
+        <div className="assistant-resize-handle" aria-hidden="true" onPointerDown={handleAssistantFloatResizeStart} />
       </aside>
     </>,
     assistantPortalRoot ?? document.body,
@@ -1677,7 +1705,7 @@ function WorkspaceApp({
       <PageHeader
         title="上市分析报告"
         description="四个 Agent 完成协作与审校后，系统在这里呈现可继续编辑和交付的 Markdown 报告。"
-        action={<div className="report-header-actions">{report && <span className={`status-pill status-${report.audit_status}`}>{statusIcon(report.audit_status)}版本 {report.version} · {statusText(report.audit_status)}</span>}{renderReportExportActions('report')}<button className="assistant-launch-button" onClick={() => setAssistantSurface('decision')}><Headset weight="duotone" /><span><strong>客服 AI</strong><small>{report ? '解释或增量修改报告' : '报告生成后可用'}</small></span></button></div>}
+        action={<div className="report-header-actions">{report && <span className={`status-pill status-${report.audit_status}`}>{statusIcon(report.audit_status)}版本 {report.version} · {statusText(report.audit_status)}</span>}{renderReportExportActions('report')}<button className="assistant-launch-button" onClick={openDecisionAssistant}><Headset weight="duotone" /><span><strong>客服 AI</strong><small>{report ? '解释或增量修改报告' : '报告生成后可用'}</small></span></button></div>}
       />
       {markdown ? (
         <section className="report-shell glass-panel">
@@ -1712,7 +1740,7 @@ function WorkspaceApp({
       <nav className="section-switcher" aria-label="运营决策子页面">
         <button className={decisionSection === 'strategy' ? 'active' : ''} aria-pressed={decisionSection === 'strategy'} onClick={() => setDecisionSection('strategy')}><Megaphone weight="duotone" /><span><strong>营销策略</strong><small>定位与上市动作</small></span></button>
         <button className={decisionSection === 'report' ? 'active' : ''} aria-pressed={decisionSection === 'report'} onClick={() => setDecisionSection('report')}><FileText weight="duotone" /><span><strong>决策报告</strong><small>Markdown 与版本</small></span></button>
-        <button className="assistant-tab" onClick={() => setAssistantSurface('decision')}><Headset weight="duotone" /><span><strong>客服 AI</strong><small>解释 · 澄清 · 增量修改</small></span><i>{conversationId ? '会话中' : 'NEW'}</i></button>
+        <button className="assistant-tab" onClick={openDecisionAssistant}><Headset weight="duotone" /><span><strong>客服 AI</strong><small>解释 · 澄清 · 增量修改</small></span><i>{conversationId ? '会话中' : 'NEW'}</i></button>
       </nav>
       {decisionSection === 'strategy' ? renderStrategy() : renderReport()}
       {renderCustomerService()}

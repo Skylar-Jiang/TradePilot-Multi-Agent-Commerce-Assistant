@@ -44,12 +44,14 @@ class Settings(BaseSettings):
     model_fast: str | None = None
     model_analysis: str | None = None
     model_report: str | None = None
+    model_customer_service: str | None = None
     model_vision: str | None = None
     model_temperature: float = 0.1
     model_timeout_seconds: int = 120
     model_max_retries: int = 3
     model_parse_max_retries: int = Field(default=1, ge=0, le=2)
     model_max_tokens: int = 4096
+    customer_service_context_max_chars: int = Field(default=28000, ge=4000, le=120000)
 
     embedding_model: str | None = None
     embedding_device: str = "cpu"
