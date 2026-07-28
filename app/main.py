@@ -110,7 +110,7 @@ def create_app(
             CORSMiddleware,
             allow_origins=resolved.cors_origins,
             allow_credentials=False,
-            allow_methods=["GET", "POST", "OPTIONS"],
+            allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
             allow_headers=["Accept", "Authorization", "Content-Type", "Last-Event-ID", "X-Request-ID"],
         )
     if resolved.allowed_hosts:

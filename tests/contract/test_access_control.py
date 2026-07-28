@@ -52,20 +52,21 @@ def test_health_remains_anonymous(tmp_path: Path) -> None:
     assert response.json()["data"]["status"] == "ok"
 
 
-def test_cors_preflight_allows_authorization_header_without_authenticating(tmp_path: Path) -> None:
+def test_cors_preflight_allows_authorized_report_deletion_without_authenticating(tmp_path: Path) -> None:
     settings = _settings(tmp_path, cors_allowed_origins="https://preview.example")
     with TestClient(create_app(settings)) as client:
         response = client.options(
-            "/api/v1/workflow/metadata",
+            "/api/v1/reports/report-1",
             headers={
                 "Origin": "https://preview.example",
-                "Access-Control-Request-Method": "GET",
+                "Access-Control-Request-Method": "DELETE",
                 "Access-Control-Request-Headers": "authorization",
             },
         )
 
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "https://preview.example"
+    assert "DELETE" in response.headers["access-control-allow-methods"]
     assert "Authorization" in response.headers["access-control-allow-headers"]
 
 
