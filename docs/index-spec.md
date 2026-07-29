@@ -1,5 +1,9 @@
 # RAG Index Spec
 
+> This specification applies only to the separate offline `exact_product` full-index/evaluation workflow. It does not
+> describe the online unlisted-product `peer_group` path, which uses bounded candidates and the configured runtime
+> embedding model (currently `text-embedding-v4` by default).
+
 Machine-readable spec: `config/rag_index_spec.json`.
 
 ## Frozen Version

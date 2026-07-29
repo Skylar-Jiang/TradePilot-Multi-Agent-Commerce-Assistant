@@ -2,7 +2,7 @@
 
 ## 改动目标
 
-为 TradePilot 增加一套可直接连接现有 FastAPI 接口的运营工作台，让用户能在一个页面完成商品录入、四 Agent 分析、过程追踪、证据审校和报告查看。
+TradePilot 当前前端是一套直接连接 FastAPI 的 React + TypeScript + Vite 运营工作台。用户可在一个页面完成商品录入、四 Agent 分析、过程追踪、证据审校、报告查看和报告后续交互。
 
 ## 视觉与交互
 
@@ -19,15 +19,16 @@
 2. 分析任务：创建商品后启动分析，轮询状态并展示整体进度。
 3. 四 Agent 看板：展示 ProductMarketAgent、UserInsightAgent、OperationsDecisionAgent、EvidenceAuditAgent 的运行状态、模型、耗时、证据数和调用数。
 4. 过程追踪：展示阶段时间线和审校问题，不把 warning 隐藏成成功。
-5. 报告输出：拉取结构化报告与 Markdown，并使用禁用原始 HTML 的渲染方式展示。
+5. 报告输出：拉取结构化报告与 Markdown，并使用禁用原始 HTML 的渲染方式展示；支持下载 Markdown 与浏览器打印/“另存为 PDF”。没有服务端 PDF 导出接口。
+6. 报告客服 AI：报告生成后打开独立浮层，通过 CustomerServiceAgent 解释、澄清或创建受证据约束的新版本报告。它不计入分析链的四个 Agent。
 
 ## 任务启动可靠性
 
-- Demo 任务始终使用进程内知识库，不再受 Real 模式的 Chroma 或 Embedding 密钥影响。
+- Demo 任务使用进程内知识库，不受 Real 模式的 Chroma 或 Embedding 密钥影响。
 - Real 任务在入队前检查聊天模型、Embedding 凭证、Git LFS 数据和离线缓存；不满足条件时立即返回明确错误。
 - 后台知识库初始化与工作流执行处于同一异常边界，失败状态和错误信息一定写回数据库。
 - 服务重启时会恢复已创建但尚未执行的 `pending` 任务，避免永久停留在“等待创建任务”。
-- 前端在任务处于 `pending` 或 `running` 时禁用重复提交和模式切换，防止连续创建相同任务。
+- 前端在任务处于 `pending` 或 `running` 时禁用重复提交和模式切换，防止连续创建相同任务；当前实现以 `/status` 和 `/timeline` 轮询进度。后端 SSE 是可供其他客户端使用的补充契约，并非本 UI 的主路径。
 
 ## 接口范围
 
@@ -36,6 +37,7 @@
 - 商品创建与文件上传
 - 分析任务创建、状态、时间线、Agent 结果与审校结果
 - 结构化报告和 Markdown 报告
+- 报告历史、版本删除/清空和 CustomerServiceAgent 对话
 - 工作流元数据
 
 具体契约仍以 `docs/api-contract.md` 和 `docs/frontend-integration.md` 为准。

@@ -6,10 +6,10 @@ HTTP 202 and a durable `run_id`; it does not wait for models or report export.
 Read `GET /api/v1/workflow/metadata` once to render stable Chinese node names, responsibilities, execution order,
 parallel groups, provider/model configuration and graph edges.
 
-Use either of these progress patterns:
+The shipped React client uses polling. A compatible client can instead use SSE:
 
-1. Poll `GET /analysis-runs/{run_id}/status` and render the ten ordered rows returned by `/timeline`.
-2. Open `GET /analysis-runs/{run_id}/events` as SSE. Store the last numeric event ID and reconnect with
+1. **Current UI:** poll `GET /analysis-runs/{run_id}/status` and render the ten ordered rows returned by `/timeline`.
+2. **Optional streaming client:** open `GET /analysis-runs/{run_id}/events` as SSE. Store the last numeric event ID and reconnect with
    `Last-Event-ID`; the server replays only later persisted events. Comment heartbeats are not business events.
 
 Terminal statuses are `succeeded`, `manual_review`, and `failed`. A failed run includes a structured persisted error
@@ -22,7 +22,7 @@ and never silently returns Demo or Mock output. On success, fetch:
 - `/metadata` for matching, RAG, SQL, parallel-overlap and workflow timings;
 - `/reports/{report_id}`, `/markdown`, and `/json` for presentation or export.
 
-For report follow-up interaction, prefer the customer-service API instead of orchestrating `feedback`, `support`, and
+For report follow-up interaction, prefer the independent customer-service API instead of orchestrating `feedback`, `support`, and
 `conversation` routes directly:
 
 - `POST /api/v1/reports/{report_id}/customer-service/messages`
@@ -33,6 +33,9 @@ For report follow-up interaction, prefer the customer-service API instead of orc
 - `GET /api/v1/reports/{report_id}/customer-service/conversations/{conversation_id}`
   - Read stored multi-turn conversation details, confirmed requirements, pending clarification items, and the latest
     report version produced by the customer-service flow
+
+CustomerServiceAgent runs only after a report exists. It is not included in the four core analysis Agents shown by the
+analysis progress API.
 
 All JSON routes except the raw Markdown/JSON download routes use the common `success/data/meta/error` envelope.
 Treat `product_id` as the uploaded candidate record ID and `peer_group_id` as the stable candidate/data/config/result

@@ -1,12 +1,21 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
+import * as assistantFloat from '../src/assistantFloat.ts'
 import {
   clampAssistantFloatPosition,
   draggedAssistantFloatPosition,
   initialAssistantFloatPosition,
   resizedAssistantFloatSize,
 } from '../src/assistantFloat.ts'
+
+test('keeps an assistant open only on its owning page', () => {
+  assert.equal(typeof assistantFloat.assistantSurfaceForPage, 'function')
+  assert.equal(assistantFloat.assistantSurfaceForPage('decision', 'decision'), 'decision')
+  assert.equal(assistantFloat.assistantSurfaceForPage('decision', 'audit'), null)
+  assert.equal(assistantFloat.assistantSurfaceForPage('history', 'decision'), null)
+  assert.equal(assistantFloat.assistantSurfaceForPage('history', 'audit'), 'history')
+})
 
 test('opens the assistant aligned to the right without a delayed position jump', () => {
   assert.deepEqual(

@@ -9,7 +9,7 @@ Formal endpoints use `/api/v1`. JSON endpoints return the unified envelope:
 Errors use `success=false`, `data=null`, and structured `error.code`, `error.message`, and `error.details`. Real mode
 never substitutes Demo/Mock output. Workflow exceptions persist a failed run when a run has already been created.
 
-The 28 routes are:
+The 30 routes implemented in `app/api/v1/router.py` are:
 
 - `GET /api/v1/health`
 - `GET /api/v1/workflow/metadata`
@@ -28,9 +28,11 @@ The 28 routes are:
 - `GET /api/v1/analysis-runs/{run_id}/metadata`
 - `GET /api/v1/analysis-runs/{run_id}/events`
 - `POST /api/v1/analysis-runs/{run_id}/feedback`
-- `GET /api/v1/reports/{report_id}`
-- `GET /api/v1/reports/{report_id}/markdown`
 - `GET /api/v1/reports`（按分析任务列出持久化报告族及其最新版本）
+- `DELETE /api/v1/reports`（清空持久化报告历史，保留商品与知识库）
+- `GET /api/v1/reports/{report_id}`
+- `DELETE /api/v1/reports/{report_id}`（删除一个报告版本，不重排其余版本）
+- `GET /api/v1/reports/{report_id}/markdown`
 - `GET /api/v1/reports/{report_id}/json`
 - `POST /api/v1/reports/{report_id}/support`
 - `POST /api/v1/reports/{report_id}/customer-service/messages`
@@ -65,7 +67,8 @@ metadata, original excerpt and source row. This preserves full traceability with
 the rendered narrative.
 
 Common Real-mode errors include `llm_not_configured`, `data_preparation_required`, `knowledge_unavailable`, and
-`workflow_failed`. `/openapi.json` is the authoritative typed frontend contract.
+`workflow_failed`. In development, `/openapi.json` exposes the typed contract; it is intentionally disabled in staging
+and production.
 
 Each item returned by `/analysis-runs/{run_id}/agents` additionally exposes `model_call_count`,
 `parse_retry_count`, `structured_output_parser`, and provider `token_usage` when available. `retry_count` at the run

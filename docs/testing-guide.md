@@ -45,8 +45,10 @@ Real final acceptance additionally requires:
    reject missing LFS content, missing/stale caches, and missing Embedding credentials before a run is queued.
 2. Run a `data_mode=real` HTTP request against uvicorn, using a client with `trust_env=False` if a workstation proxy
    interferes with provider TLS.
-3. Assert run `status=succeeded`, four persisted Agent outputs, `parallel_agent_overlap=true`, only threshold-qualified
-   peers (even if fewer than 10), peer-review evidence only, and no manual review.
+3. Assert four persisted core Agent outputs, `parallel_agent_overlap=true`, only threshold-qualified peers (even if
+   fewer than 10), and peer-review evidence only. A run may be `succeeded` or `manual_review`: assert that an
+   EvidenceAudit manual-review flag is visible when applicable, and keep the separate HTS/customs-broker review flag
+   distinct from an EvidenceAudit rejection.
 4. Read metadata, SSE, Markdown, structured report, and exported JSON endpoints.
 5. Assert the Real Markdown contains all required peer-market sections and contains none of the forbidden candidate
    review attributions or Demo/Scaffold explanation.

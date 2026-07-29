@@ -1,5 +1,9 @@
 # CustomerServiceAgent Handover
 
+> Historical handover retained for the 2026-07-19 implementation context. Its statement that no customer-service
+> frontend exists was true at that time; the current React UI includes the report customer-service surface. See
+> `docs/current-state.md` for the current boundary.
+
 ## 背景
 
 本次完成的是“报告生成后的客服对话式修改 Agent”后端闭环。
@@ -284,16 +288,16 @@
 
 核心文件：
 
-- [app/services/customer_service_agent_service.py](/f:/TradePilot/app/services/customer_service_agent_service.py)
-- [app/schemas/customer_service.py](/f:/TradePilot/app/schemas/customer_service.py)
-- [app/core/enums.py](/f:/TradePilot/app/core/enums.py)
-- [app/api/v1/router.py](/f:/TradePilot/app/api/v1/router.py)
+- [app/services/customer_service_agent_service.py](../../app/services/customer_service_agent_service.py)
+- [app/schemas/customer_service.py](../../app/schemas/customer_service.py)
+- [app/core/enums.py](../../app/core/enums.py)
+- [app/api/v1/router.py](../../app/api/v1/router.py)
 
 测试文件：
 
-- [tests/unit/test_customer_service_schemas.py](/f:/TradePilot/tests/unit/test_customer_service_schemas.py)
-- [tests/unit/test_customer_service_routing.py](/f:/TradePilot/tests/unit/test_customer_service_routing.py)
-- [tests/integration/test_customer_service_api.py](/f:/TradePilot/tests/integration/test_customer_service_api.py)
+- [tests/unit/test_customer_service_schemas.py](../../tests/unit/test_customer_service_schemas.py)
+- [tests/unit/test_customer_service_routing.py](../../tests/unit/test_customer_service_routing.py)
+- [tests/integration/test_customer_service_api.py](../../tests/integration/test_customer_service_api.py)
 
 ## 已完成验证
 

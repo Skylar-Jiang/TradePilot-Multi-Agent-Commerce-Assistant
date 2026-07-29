@@ -3,6 +3,8 @@ type FloatPosition = {
   y: number
 }
 
+export type AssistantSurface = 'decision' | 'history' | null
+
 type FloatBounds = {
   viewportWidth: number
   viewportHeight: number
@@ -15,6 +17,11 @@ const MIN_Y = 96
 const MIN_WIDTH = 340
 const MIN_HEIGHT = 420
 const clamp = (value: number, minimum: number, maximum: number) => Math.min(Math.max(value, minimum), maximum)
+
+export function assistantSurfaceForPage(surface: AssistantSurface, page: string): AssistantSurface {
+  const expectedSurface = page === 'decision' ? 'decision' : page === 'audit' ? 'history' : null
+  return surface === expectedSurface ? surface : null
+}
 
 export function clampAssistantFloatPosition(position: FloatPosition & FloatBounds): FloatPosition {
   const maxX = Math.max(MIN_X, position.viewportWidth - position.panelWidth - MIN_X)

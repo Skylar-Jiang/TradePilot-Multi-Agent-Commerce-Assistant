@@ -76,7 +76,13 @@ import {
   saveSharedAccessCode,
 } from './auth'
 import { productCategoryOptions, targetMarketOptions } from './catalogOptions'
-import { clampAssistantFloatPosition, draggedAssistantFloatPosition, initialAssistantFloatPosition, resizedAssistantFloatSize } from './assistantFloat'
+import {
+  assistantSurfaceForPage,
+  clampAssistantFloatPosition,
+  draggedAssistantFloatPosition,
+  initialAssistantFloatPosition,
+  resizedAssistantFloatSize,
+} from './assistantFloat'
 import { downloadMarkdownReport, printReportDocument } from './reportExport'
 import { summarizeTimelineStage } from './timelineStages'
 
@@ -541,6 +547,7 @@ function WorkspaceApp({
   } | null>(null)
 
   const startPageTransition = useCallback((nextPage: PageKey) => {
+    setAssistantSurface((surface) => assistantSurfaceForPage(surface, nextPage))
     const currentPage = pageRef.current
     if (currentPage === nextPage) {
       setPage(nextPage)
@@ -622,11 +629,6 @@ function WorkspaceApp({
     }
     assistantFloatSizeRef.current = size
   }, [])
-
-  useEffect(() => {
-    const expectedSurface = page === 'decision' ? 'decision' : page === 'audit' ? 'history' : null
-    if (assistantSurface && assistantSurface !== expectedSurface) setAssistantSurface(null)
-  }, [assistantSurface, page])
 
   useEffect(() => {
     if (!assistantSurface) {

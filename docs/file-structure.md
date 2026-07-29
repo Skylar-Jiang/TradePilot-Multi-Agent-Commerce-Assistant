@@ -8,11 +8,14 @@ app/
   domain/          Candidate signature, peer matching, product catalog, review lookup, offline/online boundary
   rag/             exact_product/peer_group contracts, Chroma/memory stores, embeddings
   schemas/         Pydantic product, evidence, vision, Agent, report and API models
-  services/        Product, peer group, vision, async dispatcher, report support and conversation services
+  services/        Product, peer group, vision, async dispatcher, report export/support, customer-service and conversation services
   statistics/      Statistics contract plus real pet-supplies peer-group provider
   workflows/       TradePilotState and the fan-out/fan-in LangGraph
 config/
-  peer_matching.yaml
+  peer_matching.yaml          Peer recall, rerank and acceptance thresholds
+  rag_index_spec.json         Separate exact-product/offline index specification
+  real_product_smoke_manifest.yaml
+  trade/hs_mapping.yaml       Explicit U.S. HTS candidate mappings
 data/filtered/      Git LFS real source JSONL files
 data/demo/          Ignored caches, runtime SQLite/Chroma, uploads and reports
 docs/               Architecture, contracts, operation, testing and handover

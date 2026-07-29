@@ -1,4 +1,7 @@
-# Team work split
+# Team work split (historical)
+
+> Historical planning record retained for ownership and merge context. Its deferred-frontend and incomplete-implementation
+> statements describe the planning baseline only; see `docs/current-state.md` for the current implementation.
 
 ## Teammate one: domain data and statistics
 

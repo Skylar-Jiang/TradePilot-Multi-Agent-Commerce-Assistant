@@ -1,4 +1,7 @@
-# Team Two: RAG And Analysis Agents
+# Team Two: RAG And Analysis Agents (historical)
+
+> Historical implementation-freeze record. It is retained for retrieval design and validation context; current runtime
+> behavior is documented in `docs/current-state.md` and `docs/architecture.md`.
 
 ## Scope
 

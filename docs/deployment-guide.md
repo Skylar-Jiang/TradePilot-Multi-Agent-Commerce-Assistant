@@ -1,6 +1,9 @@
-# TradePilot 私有共享测试环境部署手册
+# TradePilot 共享 staging 部署手册
 
-本文只覆盖 Vercel 前端 Preview 与 Railway 后端 staging。不要 Promote 为 Production，不绑定自定义域名，也不要把占位符当成测试地址。
+本文覆盖当前 Vercel 前端与 Railway 后端 staging。当前前端地址为
+<https://tradepilot-staging-hll-lbld.vercel.app/>，后端 API 基址为
+`https://tradepilot-staging.up.railway.app/api/v1`。它仍是共享 staging，不是用户隔离的正式生产服务；不要把
+共享访问码暴露到前端构建变量，也不要将 staging Promote 为 Production。
 
 ## 1. 仓库与运行方式
 
@@ -31,7 +34,7 @@
 4. Replica 数量固定为 `1`。SQLite、Chroma 和进程内准入锁均不支持这个阶段的多副本语义。
 5. 创建一个 Railway Volume，Mount Path 精确填写 `/data`。不要删除或 Wipe Volume 来重置演示数据。
 6. 在 Variables 中填写下表。不要手工设置 `PORT`。
-7. 首次发布后只生成 Railway 提供的 staging domain；不要添加 Custom Domain。
+7. 使用 Railway 已生成的 staging domain；不要添加 Custom Domain。
 
 ### Railway Variables
 
@@ -40,7 +43,7 @@
 | `APP_ENV` | `staging` |
 | `APP_DEBUG` | `false` |
 | `APP_API_KEY` | 手工生成的高熵共享访问码；必填、Secret |
-| `CORS_ALLOWED_ORIGINS` | 实际 Vercel Preview origin；多个用逗号分隔；不带路径、不用 `*` |
+| `CORS_ALLOWED_ORIGINS` | `https://tradepilot-staging-hll-lbld.vercel.app`；多个 origin 用逗号分隔；不带路径、不用 `*` |
 | `TRUSTED_HOSTS` | `healthcheck.railway.app,*.up.railway.app,*.railway.internal` |
 | `DATABASE_URL` | `sqlite:////data/tradepilot.db` |
 | `CHROMA_DIR` / `CHROMA_PERSIST_DIR` | `/data/chroma` |
@@ -79,7 +82,7 @@ PEER_METADATA_PATH=data/filtered/meta_pet_supplies_prefiltered.jsonl
 PEER_REVIEWS_PATH=data/filtered/pet_supplies_reviews_prefiltered.jsonl
 ```
 
-并同时设置非空的 `DEEPSEEK_API_KEY`、`QWEN_API_KEY`、`MODEL_ANALYSIS`、`MODEL_FAST`、`MODEL_REPORT`、`MODEL_VISION`。真实值只放 Railway Variables；不要放入命令、日志或前端变量。若访问码或模型密钥曾出现在聊天、工单或终端历史中，先在对应平台轮换，再重新部署。
+默认混合路由同时设置非空的 `DEEPSEEK_API_KEY`、`QWEN_API_KEY`、`MODEL_ANALYSIS`、`MODEL_FAST`、`MODEL_REPORT`、`MODEL_VISION`。文本-only DeepSeek 路由可以不设 Qwen；但默认 `text-embedding-v4` 和有效候选图片的视觉分析需要 Qwen。真实值只放 Railway Variables；不要放入命令、日志或前端变量。若访问码或模型密钥曾出现在聊天、工单或终端历史中，先在对应平台轮换，再重新部署。
 
 当前路由不依据模型名字猜 provider：`MODEL_ANALYSIS` 使用 DeepSeek；当 Qwen 凭证存在时，`MODEL_REPORT`、`MODEL_FAST` 使用 Qwen，视觉始终使用 Qwen；`text-embedding-*` 使用 Qwen-compatible Embedding。`real_model_configured` 只表示四个文本 Agent 的模型入口可构造，不替代 RAG、Embedding 和数据检查。
 
@@ -146,16 +149,16 @@ python scripts/import_us_hts_tariffs.py \
 
 ```powershell
 $accessCode = Read-Host "Shared access code" -MaskInput
-Invoke-WebRequest https://<railway-domain>/api/v1/health -UseBasicParsing
-Invoke-WebRequest https://<railway-domain>/api/v1/workflow/metadata -SkipHttpErrorCheck -UseBasicParsing
-Invoke-WebRequest https://<railway-domain>/api/v1/workflow/metadata -Headers @{ Authorization = "Bearer $accessCode" } -UseBasicParsing
-Invoke-WebRequest https://<railway-domain>/openapi.json -SkipHttpErrorCheck -UseBasicParsing
+Invoke-WebRequest https://tradepilot-staging.up.railway.app/api/v1/health -UseBasicParsing
+Invoke-WebRequest https://tradepilot-staging.up.railway.app/api/v1/workflow/metadata -SkipHttpErrorCheck -UseBasicParsing
+Invoke-WebRequest https://tradepilot-staging.up.railway.app/api/v1/workflow/metadata -Headers @{ Authorization = "Bearer $accessCode" } -UseBasicParsing
+Invoke-WebRequest https://tradepilot-staging.up.railway.app/openapi.json -SkipHttpErrorCheck -UseBasicParsing
 Remove-Variable accessCode
 ```
 
 预期依次为 200、401、200、404。还要确认 Alembic upgrade 成功、服务没有重启循环，且日志不包含访问码或模型密钥。
 
-## 4. Vercel 前端 Preview
+## 4. Vercel 前端 staging
 
 | Vercel 字段 | 精确值 |
 | --- | --- |
@@ -166,11 +169,11 @@ Remove-Variable accessCode
 | Build Command | `npm run build` |
 | Output Directory | `dist` |
 | Node.js Version | `22.x` |
-| Preview Variable | `VITE_API_BASE_URL=https://<railway-domain>/api/v1` |
+| Environment Variable | `VITE_API_BASE_URL=https://tradepilot-staging.up.railway.app/api/v1` |
 
 `frontend/vercel.json` 提供 SPA fallback、CSP 和基础安全响应头。`VITE_API_BASE_URL` 是唯一需要的浏览器构建变量；不要创建任何包含访问码或服务端秘密的 `VITE_*` 变量。
 
-Vercel 真实 Preview URL 生成后，把其完整 origin 加入 Railway `CORS_ALLOWED_ORIGINS` 并重新部署后端。浏览器终验应覆盖：访问页、错误码提示、正确码进入、刷新仍在当前会话、业务请求带 Authorization、模拟 401 自动返回访问页、退出按钮清凭证、关闭标签页后凭证消失。
+Vercel staging URL 已生成；其完整 origin 必须保留在 Railway `CORS_ALLOWED_ORIGINS` 后再部署后端。浏览器终验应覆盖：访问页、错误码提示、正确码进入、刷新仍在当前会话、业务请求带 Authorization、模拟 401 自动返回访问页、退出按钮清凭证、关闭标签页后凭证消失。
 
 ## 5. 持久化边界
 
@@ -206,7 +209,7 @@ python scripts/seed_demo.py --profile generic_cross_border_demo
 
 - 代码回滚：`git revert <this-commit>` 后推送 `main`；不要改写共享历史。
 - Railway：重新部署上一个成功 commit。代码回滚不会自动降级 schema，也不会删除 Volume 数据。
-- Vercel：重新部署上一个成功 Preview；不要 Promote to Production。
+- Vercel：重新部署上一个成功 staging 部署；不要 Promote to Production。
 - 数据回滚：先保留当前 `/data` 快照，再从 `DEMO_BACKUP_DIR` 中选择明确备份恢复 SQLite、uploads 和 reports。不要在运行中的 worker 写数据库时覆盖文件。
 
 ## 8. 上线前检查
@@ -215,9 +218,11 @@ python scripts/seed_demo.py --profile generic_cross_border_demo
 - [ ] Railway 已设置非空 `APP_API_KEY`，Vercel 没有访问码变量。
 - [ ] `APP_DEBUG=false`、Replica=1、`RUN_WORKER_COUNT=1`，Volume 挂载到 `/data`。
 - [ ] health 匿名 200；核心 API 未认证/错误码为 401；正确码为 200；staging OpenAPI 为 404。
-- [ ] CORS 只包含实际 Preview origin，Trusted Hosts 与真实 Railway host 匹配。
+- [ ] CORS 只包含当前 Vercel staging origin，Trusted Hosts 与真实 Railway host 匹配。
 - [ ] 前端 401 自动退出和手动退出均已验证，控制台和错误 UI 不显示访问码。
 - [ ] 已接受单一共享工作区的数据可见性和互相覆盖风险。
 - [ ] 未绑定自定义域名，未创建或提升正式生产部署。
 
-在平台账号授权和实际部署完成前，前端 Preview URL 与后端 Railway URL 均为“未生成”。占位符不是可访问地址，也不得作为部署成功证据。
+截至 2026-07-29，Vercel 首页和 Railway `/api/v1/health` 均返回 200；未携带访问码访问
+`/api/v1/workflow/metadata` 返回 401，staging `/openapi.json` 返回 404。此探测只确认部署与访问边界；它不替代
+带真实凭证、缓存和模型配置的 Real-mode 验收。

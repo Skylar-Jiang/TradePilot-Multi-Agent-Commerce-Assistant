@@ -10,7 +10,7 @@ flowchart LR
     API --> V["Conditional Qwen vision"]
     API --> P["Prepared catalog + FTS candidate filter"]
     P --> E["Embedding rerank of 40 candidates"]
-    E --> G["Up to 30 peers that pass configured thresholds"]
+    E --> G["Up to 20 peers that pass configured thresholds"]
     G --> Q["Offset lookup of peer reviews"]
     G --> DB["Independent runtime SQLite"]
     Q --> DB
@@ -39,6 +39,11 @@ Each Real Agent runs one typed LCEL chain:
 failures can repeat that chain, bounded by `MODEL_PARSE_MAX_RETRIES`. Provider/network retries use the independent
 `MODEL_MAX_RETRIES` setting. Persisted Agent output records model-call count, parse-retry count, parser name and token
 usage when the provider returns it.
+
+CustomerServiceAgent is deliberately outside this graph. It starts only after a report is available, uses the report
+and stored conversation context through `CustomerServiceAgentService`, and may create a guarded report version. It is
+not a fifth core analysis Agent. The graph has no LangGraph checkpointer or Tool Calling nodes; durable run, event,
+report and conversation records are persisted by the application services.
 
 The dispatcher runs analysis outside the request thread. SQLite uses WAL and a bounded busy timeout so frontend status
 reads can coexist with peer/evidence writes. Each real background run initializes its Chroma client in the worker

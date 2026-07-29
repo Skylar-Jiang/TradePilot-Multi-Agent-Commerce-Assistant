@@ -11,8 +11,8 @@ are stored and described only as peer-market products; their reviews are peer-re
 idempotently reused, and automatically reported stale when the source changes. Both live under ignored
 `data/demo/cache/`.
 
-No full-corpus embedding is created. Online selection uses FTS/rules to retain about 100-300 candidates, embeds only
-the candidate subset, reranks about 20-50, and selects up to 10-30 complete peer products that pass the configured
+No full-corpus embedding is created. Online selection uses FTS/rules to retain up to 300 candidates, embeds only
+the candidate subset, reranks up to 40, and selects up to 20 complete peer products that pass the configured
 rule and semantic thresholds. It never lowers a threshold or adds unrelated products to meet 10. When fewer than 10
 qualify, the actual set is retained and `insufficient_peer_products` is propagated through statistics, Agents, API
 metadata, and the report. Configured accessory terms exclude filters, pumps, mats, cleaning brushes, adapters,

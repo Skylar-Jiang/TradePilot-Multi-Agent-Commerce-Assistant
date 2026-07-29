@@ -4,23 +4,28 @@ TradePilot analyzes an unlisted pet product by matching it to real listed peer p
 insights in peer metadata, SQL statistics, and peer-review RAG evidence. Real mode uses four LCEL Agents in one
 LangGraph workflow and never falls back to Demo or Mock.
 
-The repository contains the FastAPI backend at the root and the React/Vite dashboard in `frontend/`. The current
-hosted target is a **private shared staging workspace**: authorized members share products, analysis runs,
-conversations, reports, uploads, Chroma and peer caches. It is not a public production deployment. For the exact
-Railway/Vercel setup, persistent-volume layout, access-code policy, rollback and demo-data reset steps, see
-[`docs/deployment-guide.md`](docs/deployment-guide.md).
+The repository contains the FastAPI backend at the root and the React + TypeScript + Vite dashboard in `frontend/`.
+The deployed staging UI is [https://tradepilot-staging-hll-lbld.vercel.app/](https://tradepilot-staging-hll-lbld.vercel.app/);
+it calls the FastAPI staging API on Railway. This is a **shared staging workspace**, not a public production service:
+authorized members share products, analysis runs, conversations, reports, uploads, Chroma and peer caches. For the
+exact Railway/Vercel setup, persistent-volume layout, access-code policy, rollback and demo-data reset steps, see
+[`docs/deployment-guide.md`](docs/deployment-guide.md). The concise code-verified runtime view is
+[`docs/current-state.md`](docs/current-state.md); dated handovers and validation reports are historical evidence.
 
 ## Runtime contract
 
 - Python `>=3.12,<3.13`
 - LangChain 1.3.x, LangChain Core 1.4.x, LangGraph 1.2.x
 - FastAPI, Pydantic v2, SQLAlchemy/Alembic, SQLite, Chroma
-- DeepSeek V4 Flash for ProductMarketAgent and UserInsightAgent
-- Qwen 3.7 Plus for OperationsDecisionAgent, Qwen 3.6 Flash for EvidenceAuditAgent
+- DeepSeek V4 Flash for ProductMarketAgent and UserInsightAgent by default
+- Qwen 3.7 Plus for OperationsDecisionAgent, Qwen 3.6 Flash for EvidenceAuditAgent by default
 - Qwen3-VL Plus for conditional image understanding and `text-embedding-v4` for bounded candidate/RAG embeddings
 
-Demo mode remains available for deterministic compatibility tests. Real mode requires both provider keys, prepared
-offline lookup caches, Chroma, and the real source JSONL files.
+Demo mode remains available for deterministic compatibility tests. Real mode requires a configured text-model route,
+prepared offline lookup caches, Chroma, embedding credentials for the selected embedding route, and the real source
+JSONL files. The default mixed route uses DeepSeek for the two analysis Agents and Qwen for operations, audit,
+embeddings and optional vision; a text-only DeepSeek route is also supported. CustomerServiceAgent uses the report
+model (or `MODEL_CUSTOMER_SERVICE`) only after a report exists and is not part of the core four-Agent workflow.
 
 ## Data modes and index scope
 
@@ -118,8 +123,9 @@ npm ci
 npm run dev
 ```
 
-Vite serves the dashboard at `http://127.0.0.1:5173` and proxies `/api/v1` to the local API. For Vercel, set only
-`VITE_API_BASE_URL=https://<railway-domain>/api/v1`; the shared access code is entered at runtime and remains only in
+Vite serves the dashboard at `http://127.0.0.1:5173` and proxies `/api/v1` to the local API. The deployed Vercel
+build uses `VITE_API_BASE_URL=https://tradepilot-staging.up.railway.app/api/v1`; the shared access code is entered at
+runtime and remains only in
 the current browser session. The UI covers product
 creation, optional file upload, four-Agent progress, timeline, audit results, and structured/Markdown reports. See
 `frontend/README.md` and `docs/frontend-implementation.md` for the design and integration details.
@@ -129,8 +135,9 @@ In staging, `/api/v1/health` is the only anonymous application endpoint. All oth
 CORS limits browser origins but does not replace this authentication.
 
 Create a `data_mode=real` product with its name, description, features, parameters, scenarios, target species/users,
-target price, and optional uploaded image. `POST /api/v1/analysis-runs` returns `202` immediately; poll `/status` or
-consume the persisted `/events` SSE stream, which supports `Last-Event-ID` replay. Timeline, Agent outputs, peers,
+target price, and optional uploaded image. `POST /api/v1/analysis-runs` returns `202` immediately; the current UI
+polls `/status` and `/timeline`. The backend also exposes persisted `/events` SSE with `Last-Event-ID` replay for
+clients that need streaming progress. Timeline, Agent outputs, peers,
 evidence, audit, metadata, Markdown, JSON, immutable report versions, evidence explanations, local section edits and
 rollback are available from the endpoints in `docs/api-contract.md`. Frontend integration and report-support rules are
 documented in `docs/frontend-integration.md` and `docs/report-support.md`.
@@ -166,6 +173,6 @@ npm run build
 ```
 
 Real provider tests are opt-in so normal CI remains deterministic. The final HTTP E2E must be run with local secrets
-and `trust_env=False` when the workstation has an incompatible system proxy. See `docs/testing-guide.md` and
-`docs/handover/handover.md`. Do not run a live Real-mode workflow unless its provider keys, Git LFS sources, prepared
+and `trust_env=False` when the workstation has an incompatible system proxy. See `docs/testing-guide.md`,
+`docs/current-state.md`, and the historical `docs/handover/handover.md`. Do not run a live Real-mode workflow unless its provider keys, Git LFS sources, prepared
 peer cache and RAG prerequisites have been verified; it can consume model-provider quota.

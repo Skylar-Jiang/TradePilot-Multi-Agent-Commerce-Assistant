@@ -1,6 +1,7 @@
 # 第三部分历史合并说明：运营决策、证据审校与报告导出
 
-> 历史实施记录；最终 peer-group 生产主链以 `docs/handover/handover.md` 为准。
+> 历史实施记录；最终 peer-group 生产主链以 `docs/current-state.md`、`docs/architecture.md` 和当前代码为准。
+> 本文关于“正式前端延期”和“PDF 导出未定义”的陈述仅描述当时状态；当前 React UI 已提供 Markdown 下载和浏览器打印/另存为 PDF。
 
 ## 一、合并状态
 

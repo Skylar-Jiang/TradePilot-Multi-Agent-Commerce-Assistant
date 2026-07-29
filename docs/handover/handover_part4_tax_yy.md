@@ -1,5 +1,9 @@
 # TradePilot 美国税费接入工作交接说明
 
+> Historical handover retained for the 2026-07-17 tax integration. Its old local paths and DeepSeek-only empty-
+> embedding example are historical; a current Real-mode run needs a configured embedding route. See
+> `docs/current-state.md` and `docs/model-provider-configuration.md` for current operation.
+
 更新时间：2026-07-17
 
 本文档用于交接本轮围绕“美国市场税费接入”的实际改动、当前状态、运行方式、遗留问题与后续建议。  
@@ -92,41 +96,41 @@
 
 ### 1. 税费 provider 与映射
 
-- [config/trade/hs_mapping.yaml](/f:/TradePilot/config/trade/hs_mapping.yaml)
+- [config/trade/hs_mapping.yaml](../../config/trade/hs_mapping.yaml)
   - 扩展美国 HTS 安全映射与 alias
 
-- [app/background/providers/us_tariff_provider.py](/f:/TradePilot/app/background/providers/us_tariff_provider.py)
+- [app/background/providers/us_tariff_provider.py](../../app/background/providers/us_tariff_provider.py)
   - 增加税费结构化摘要
   - 增加决策输入字段
   - 增加 landed cost / 毛利 / 人工复核方向的表达
 
 ### 2. agent 接入与兼容处理
 
-- [app/agents/operations_decision.py](/f:/TradePilot/app/agents/operations_decision.py)
+- [app/agents/operations_decision.py](../../app/agents/operations_decision.py)
   - 在不改主逻辑骨架的前提下接入税费决策输入
   - 允许背景税费 evidence ID 进入 plan
   - 对模型返回的对象型 `positioning` 做兼容归一化
   - 将 `background_context` 中的数字纳入允许来源，避免 HTS 编码与税率数字被误替换
 
-- [app/agents/evidence_audit.py](/f:/TradePilot/app/agents/evidence_audit.py)
+- [app/agents/evidence_audit.py](../../app/agents/evidence_audit.py)
   - 修复税费背景中的 HTS 编码被误判为未验证数字的情况
 
-- [app/agents/model_factory.py](/f:/TradePilot/app/agents/model_factory.py)
+- [app/agents/model_factory.py](../../app/agents/model_factory.py)
   - `operations` 与 `audit` 支持 DeepSeek-only real 模式
 
 ### 3. 真实运行兼容与跳过逻辑
 
-- [app/services/product_vision_service.py](/f:/TradePilot/app/services/product_vision_service.py)
+- [app/services/product_vision_service.py](../../app/services/product_vision_service.py)
   - 仅在真正存在有效候选图片时才初始化 vision model
   - 无图场景不再因为缺 `QWEN_API_KEY` 中断整条 real 工作流
 
-- [app/core/config.py](/f:/TradePilot/app/core/config.py)
+- [app/core/config.py](../../app/core/config.py)
   - 放宽 `real_model_configured`
   - 允许只用 DeepSeek 跑文本 real 链路
 
 ### 4. 报告与配置文档
 
-- [docs/model-provider-configuration.md](/f:/TradePilot/docs/model-provider-configuration.md)
+- [docs/model-provider-configuration.md](../model-provider-configuration.md)
   - 新增模型 provider 配置文档
   - 覆盖 `DeepSeek-only` / `DeepSeek + Qwen` / `OpenAI-compatible`
 
@@ -134,18 +138,18 @@
 
 ### 1. 已补充或更新的测试
 
-- [tests/unit/background/test_us_tariff_provider.py](/f:/TradePilot/tests/unit/background/test_us_tariff_provider.py)
-- [tests/unit/agents/test_decision_agents.py](/f:/TradePilot/tests/unit/agents/test_decision_agents.py)
-- [tests/unit/agents/test_model_factory.py](/f:/TradePilot/tests/unit/agents/test_model_factory.py)
-- [tests/unit/test_config.py](/f:/TradePilot/tests/unit/test_config.py)
-- [tests/integration/test_background_provider_workflow.py](/f:/TradePilot/tests/integration/test_background_provider_workflow.py)
+- [tests/unit/background/test_us_tariff_provider.py](../../tests/unit/background/test_us_tariff_provider.py)
+- [tests/unit/agents/test_decision_agents.py](../../tests/unit/agents/test_decision_agents.py)
+- [tests/unit/agents/test_model_factory.py](../../tests/unit/agents/test_model_factory.py)
+- [tests/unit/test_config.py](../../tests/unit/test_config.py)
+- [tests/integration/test_background_provider_workflow.py](../../tests/integration/test_background_provider_workflow.py)
 
 ### 2. 已执行通过的命令
 
 统一使用 `shixun` 虚拟环境执行。
 
 ```powershell
-& C:\Users\ASUS\.conda\envs\shixun\python.exe -m pytest tests\unit\agents\test_decision_agents.py tests\unit\agents\test_model_factory.py tests\unit\test_config.py tests\integration\test_background_provider_workflow.py -q
+.\.venv\Scripts\python.exe -m pytest tests\unit\agents\test_decision_agents.py tests\unit\agents\test_model_factory.py tests\unit\test_config.py tests\integration\test_background_provider_workflow.py -q
 ```
 
 本轮最终回归结果：
@@ -195,7 +199,7 @@ RAG_USE_CHROMA=true
 
 完整配置说明见：
 
-- [model-provider-configuration.md](/f:/TradePilot/docs/model-provider-configuration.md)
+- [model-provider-configuration.md](../model-provider-configuration.md)
 
 ## 六、当前结论
 
@@ -236,8 +240,7 @@ RAG_USE_CHROMA=true
 ### 1. 启动服务
 
 ```powershell
-cd F:\TradePilot
-& C:\Users\ASUS\.conda\envs\shixun\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 ### 2. 运行真实商品分析
