@@ -1,3 +1,4 @@
+# 证据审校 Agent：检查关键数字、证据引用、结论冲突和无依据表达。
 from __future__ import annotations
 
 import json

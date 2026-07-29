@@ -1,3 +1,4 @@
+// 商品类别与目标市场选项：为搜索下拉框提供可复用的业务词典。
 export type CatalogOption = {
   value: string
   group: string

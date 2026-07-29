@@ -1,3 +1,4 @@
+# 同类商品服务：协调匹配算法、缓存和数据源，输出统一的样本集合。
 from __future__ import annotations
 
 from collections.abc import Callable

@@ -1,3 +1,4 @@
+// TradePilot 主界面：组织四个 Agent 页面、历史报告和客服交互。
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import {

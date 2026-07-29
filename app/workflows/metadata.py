@@ -1,3 +1,4 @@
+# 工作流元数据：维护前端展示所需的节点名称、顺序和状态说明。
 from typing import Any
 
 from app.core.config import Settings

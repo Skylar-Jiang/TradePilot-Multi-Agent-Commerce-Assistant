@@ -1,3 +1,4 @@
+# 同类商品匹配领域逻辑：统一特征、计算相似度并筛选可引用样本。
 from __future__ import annotations
 
 import json

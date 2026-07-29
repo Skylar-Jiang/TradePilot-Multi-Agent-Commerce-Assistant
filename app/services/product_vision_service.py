@@ -1,3 +1,4 @@
+# 商品视觉服务：处理上传图片并调用视觉模型提取商品特征。
 from __future__ import annotations
 
 import base64

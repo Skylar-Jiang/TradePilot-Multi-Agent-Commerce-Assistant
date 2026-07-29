@@ -1,3 +1,4 @@
+# 市场分析 Agent：结合同类商品、市场数据和目标国家生成市场判断。
 from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel

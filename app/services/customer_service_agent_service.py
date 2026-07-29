@@ -6,47 +6,73 @@ from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
+# 导入应用内的核心枚举类型，用于定义客服行为、意图、人格以及错误代码
 from app.core.enums import (
     CustomerServiceAction,
     CustomerServiceIntent,
     CustomerServicePersonality,
     ErrorCode,
 )
+# 导入自定义异常类
 from app.core.exceptions import TradePilotError
+# 导入基于 SQLAlchemy 的分析报告仓库，用于数据持久化操作
 from app.db.repositories.sqlalchemy import SqlAlchemyAnalysisRepository
+# 导入通用时间工具函数
 from app.schemas.common import utc_now
+# 导入客服服务相关的数据模式 (Schemas)，用于请求与响应数据的结构化
 from app.schemas.customer_service import (
     CustomerServiceConversationMessageRead,
     CustomerServiceConversationRead,
     CustomerServiceMessageRequest,
     CustomerServiceMessageResponse,
 )
+# 导入报告相关的数据模式
 from app.schemas.report import FinalReport, ReportSupportRequest
+# 导入对话服务和报告支持服务等业务逻辑组件
 from app.services.conversation_service import ConversationService
 from app.services.report_exporter import ReportExporter
 from app.services.report_support_service import ReportSupportService
 
+# ==========================================
+# 正则表达式与关键词定义区块
+# 该区块定义了用于从用户输入中提取意图和特定信息的正则表达式模式和关键词
+# ==========================================
+
+# 提取目标受众或客群调整意图的正则
 AUDIENCE_PATTERN = re.compile(
     r"(?:目标用户|用户群体|客群|受众).{0,8}?(?:改成|调整为|改为|变成)([^，。；,!?？]{2,24})"
 )
+# 提取产品定位调整方向的正则
 POSITIONING_DIRECTION_PATTERN = re.compile(
     r"(?:定位).{0,8}?(?:改成|调整为|改为|变成|更偏|偏向|更)([^，。；,!?？]{2,24})"
 )
+# 提取营销文案调整方向的正则
 MARKETING_COPY_DIRECTION_PATTERN = re.compile(
     r"(?:营销文案|文案|表达).{0,8}?(?:改成|调整为|改为|变成|更偏|偏向|更|写得)([^，。；,!?？]{2,24})"
 )
+# 提取推广和渠道策略调整方向的正则
 PROMOTION_DIRECTION_PATTERN = re.compile(
     r"(?:推广策略|渠道策略|投放策略|推广渠道|投放渠道).{0,8}?(?:改成|调整为|改为|变成|更偏|偏向|更)([^，。；,!?？]{2,24})"
 )
+# 识别整份报告重写请求的正则（通常会被拒绝，因为超出客服修改范围）
 FULL_REWRITE_PATTERN = re.compile(r"(整份报告|全部重写|整个报告)")
+# 识别不支持的纯数字调整的正则（例如强行修改转化率预期）
 UNSUPPORTED_NUMERIC_PATTERN = re.compile(r"\b\d+(?:\.\d+)?%\b")
 
+# 定义各类预设受众群体的关键词匹配规则
 STUDENT_AUDIENCE_KEYWORD = "大学生"
 WHITE_COLLAR_KEYWORDS = ("白领", "上班族", "职场", "通勤")
 BEGINNER_PET_OWNER_KEYWORDS = ("新手养宠", "养宠新手", "第一次养宠", "初次养宠")
 MULTI_PET_KEYWORDS = ("多宠", "多猫", "多狗", "多只宠物", "多宠家庭")
 DEFAULT_AUDIENCE_LABEL = "新的目标用户群体"
 
+# ==========================================
+# 预设策略规则区块
+# 该区块针对不同的目标受众群体，定义了一套完整的策略调整模板，
+# 包括用户标签、画像总结、产品定位、营销文案、渠道策略、首发动作、后续行动等
+# ==========================================
+
+# 针对“大学生”群体的策略调整规则
 STUDENT_AUDIENCE_RULES = {
     "audience_label": "大学生群体",
     "persona_summary": "以预算敏感、宿舍生活、颜值偏好和社交分享意愿较强的大学生养宠人群为核心客群。",
@@ -74,6 +100,7 @@ STUDENT_AUDIENCE_RULES = {
     "insight_note": "后续用户洞察应重点关注大学生群体对预算、宿舍使用限制、颜值设计和社交分享属性的敏感度。",
 }
 
+# 针对“年轻白领”群体的策略调整规则
 WHITE_COLLAR_AUDIENCE_RULES = {
     "audience_label": "年轻白领",
     "persona_summary": "以注重生活品质、居家整洁感、时间效率和产品设计感的年轻白领养宠人群为核心客群。",
@@ -101,6 +128,7 @@ WHITE_COLLAR_AUDIENCE_RULES = {
     "insight_note": "后续用户洞察应重点关注年轻白领对静音、清洁效率、材质质感和家居融入度的敏感点。",
 }
 
+# 针对“新手养宠人群”的策略调整规则
 BEGINNER_PET_OWNER_RULES = {
     "audience_label": "新手养宠人群",
     "persona_summary": "以缺少养宠经验、担心踩坑、重视易上手和安全感的新手养宠用户为核心客群。",
@@ -128,6 +156,7 @@ BEGINNER_PET_OWNER_RULES = {
     "insight_note": "后续用户洞察应重点关注新手养宠用户对易上手、维护复杂度、提醒功能和踩坑风险的敏感点。",
 }
 
+# 针对“多宠家庭用户”的策略调整规则
 MULTI_PET_AUDIENCE_RULES = {
     "audience_label": "多宠家庭用户",
     "persona_summary": "以多只宠物共同饮水、补水频率更高、重视容量与稳定性的多宠家庭用户为核心客群。",
@@ -157,7 +186,13 @@ MULTI_PET_AUDIENCE_RULES = {
 
 
 class CustomerServiceAgentService:
+    """
+    智能客服服务类，负责处理用户对生成的报告进行的后续对话请求，
+    能够理解用户意图并对报告进行定向调整、润色或解释说明。
+    """
+
     def __init__(self, session: Session) -> None:
+        # 初始化数据库依赖服务
         self.reports = SqlAlchemyAnalysisRepository(session)
         self.conversations = ConversationService(session)
         self.report_support = ReportSupportService(session)
@@ -167,16 +202,25 @@ class CustomerServiceAgentService:
         report_id: str,
         request: CustomerServiceMessageRequest,
     ) -> CustomerServiceMessageResponse:
+        """
+        处理客服对话入口主方法。
+        根据用户输入消息，分类意图，并将请求分发给相应的处理函数。
+        """
         report = self.reports.get_report(report_id)
         latest = self.reports.get_latest_report(report.run_id)
+        # 校验请求是否针对最新版本的报告，防止基于过期报告进行修改
         if latest.report_id != report.report_id:
             raise TradePilotError(
                 ErrorCode.VALIDATION_ERROR,
                 "Customer service requests must target the latest report version",
                 422,
             )
+        # 确保会话ID存在，如果没有则生成新的UUID
         conversation_id = request.conversation_id or str(uuid4())
+        # 解析用户的对话意图
         intent = self._classify_intent(request.message)
+
+        # 路由分发机制：根据不同意图调用对应的私有处理方法
         if intent is CustomerServiceIntent.EXPLAIN:
             return self._handle_explain(report, request, conversation_id)
         if intent is CustomerServiceIntent.CLARIFICATION_REQUIRED:
@@ -191,12 +235,17 @@ class CustomerServiceAgentService:
             return self._handle_marketing_copy_edit(report, request, conversation_id)
         if intent is CustomerServiceIntent.MODIFY_PROMOTION_STRATEGY:
             return self._handle_promotion_strategy_edit(report, request, conversation_id)
+        # 默认回退为目标导向的整体策略重新生成
         return self._handle_targeted_regeneration(report, request, conversation_id)
 
     def get_conversation(self, report_id: str, conversation_id: str) -> CustomerServiceConversationRead:
+        """
+        获取对话上下文信息，包含对话历史、报告版本关联等元数据，以便在前端展示。
+        """
         report = self.reports.get_report(report_id)
         payload = self.conversations.get(conversation_id)
         metadata = dict(payload["metadata"])
+        # 权限/关联性检查：确保请求的对话属于当前报告任务
         if metadata.get("report_id") != report.report_id and metadata.get("run_id") != report.run_id:
             raise TradePilotError(
                 ErrorCode.VALIDATION_ERROR,
@@ -204,6 +253,7 @@ class CustomerServiceAgentService:
                 422,
             )
         personality = metadata.get("personality", CustomerServicePersonality.PROFESSIONAL.value)
+        # 构建并返回完整的对话视图对象
         return CustomerServiceConversationRead(
             conversation_id=conversation_id,
             report_id=str(metadata.get("report_id") or report.report_id),
@@ -238,25 +288,37 @@ class CustomerServiceAgentService:
 
     @staticmethod
     def _classify_intent(message: str) -> CustomerServiceIntent:
+        """
+        简单的规则引擎，用于基于关键词和正则表达式对用户输入进行意图分类。
+        """
         text = message.strip()
+        # 如果是全篇重写或无依据的数据修改，直接归类为拒绝请求
         if FULL_REWRITE_PATTERN.search(text) or UNSUPPORTED_NUMERIC_PATTERN.search(text):
             return CustomerServiceIntent.REJECT
+        # 询问原因类的意图归类为解释
         if any(token in text for token in ("为什么", "为何", "解释", "说明")):
             return CustomerServiceIntent.EXPLAIN
+        # 检查是否包含受众修改信号
         if CustomerServiceAgentService._has_audience_signal(text):
             return CustomerServiceIntent.MODIFY_STRATEGY
+        # 检查是否包含推广策略修改信号
         if CustomerServiceAgentService._has_promotion_signal(text):
             return CustomerServiceIntent.MODIFY_PROMOTION_STRATEGY
+        # 检查是否包含营销文案修改信号
         if CustomerServiceAgentService._has_marketing_copy_signal(text):
             return CustomerServiceIntent.MODIFY_MARKETING_COPY
+        # 检查定位调整且表述模糊时，要求进一步澄清
         if any(token in text for token in ("改一下定位", "调整一下定位", "改改定位")):
             return CustomerServiceIntent.CLARIFICATION_REQUIRED
+        # 检查定位调整的具体信号
         if CustomerServiceAgentService._has_positioning_signal(text):
             return CustomerServiceIntent.MODIFY_POSITIONING
+        # 针对局部文段如“下一步”、“注意事项”进行润色、改写的请求
         if any(token in text for token in ("下一步", "注意事项", "假设")) and any(
             token in text for token in ("润色", "改写", "更专业", "更通俗", "更简洁")
         ):
             return CustomerServiceIntent.LOCALIZED_EDIT
+        # 默认情况需要进一步澄清意图
         return CustomerServiceIntent.CLARIFICATION_REQUIRED
 
     def _handle_explain(
@@ -265,7 +327,13 @@ class CustomerServiceAgentService:
         request: CustomerServiceMessageRequest,
         conversation_id: str,
     ) -> CustomerServiceMessageResponse:
+        """
+        处理“解释说明”意图。
+        不会修改报告，只针对用户询问的内容通过后台大模型提供解释，并在对话中回复。
+        """
+        # 选择相关报告区块以提供上下文
         section_id = self._pick_section_id(report, request.message, default="launch-marketing-strategy")
+        # 调用大模型辅助服务生成解释
         result = self.report_support.support(
             report.report_id,
             ReportSupportRequest(
@@ -275,11 +343,13 @@ class CustomerServiceAgentService:
                 conversation_id=conversation_id,
             ),
         )
+        # 根据系统设定的人格风格化回复话术
         reply = self._style_reply(
             request.personality,
             base=str(result["response"]),
             summary="我保留了证据范围和限制说明，没有改动报告内容。",
         )
+        # 更新对话元数据
         self._merge_metadata(
             conversation_id,
             report=report,
@@ -310,6 +380,10 @@ class CustomerServiceAgentService:
         request: CustomerServiceMessageRequest,
         conversation_id: str,
     ) -> CustomerServiceMessageResponse:
+        """
+        处理“需要澄清”意图。
+        当用户的修改指令不够明确时，主动向用户提问以收集更多上下文。
+        """
         pending_questions = ["你希望新的产品定位更偏高端、性价比，还是功能专业型？"]
         reply = self._style_reply(
             request.personality,
@@ -349,6 +423,10 @@ class CustomerServiceAgentService:
         request: CustomerServiceMessageRequest,
         conversation_id: str,
     ) -> CustomerServiceMessageResponse:
+        """
+        处理“拒绝请求”意图。
+        当用户提出全篇重写或随意修改数据等不合理要求时，礼貌拒绝以保证报告的严谨性。
+        """
         reply = self._style_reply(
             request.personality,
             base="这次需求超出了当前客服改版范围。",
@@ -387,11 +465,19 @@ class CustomerServiceAgentService:
         request: CustomerServiceMessageRequest,
         conversation_id: str,
     ) -> CustomerServiceMessageResponse:
+        """
+        处理“局部改写/润色”意图。
+        针对报告中某个小段落（如下一步行动）应用用户的文本风格偏好（更通俗、更专业等）。
+        """
         latest = self.reports.get_latest_report(report.run_id)
+        # 获取需要改写的目标字段（此处以下一步行动 next_actions 为例）
         replacement = list(latest.sections.get("next_actions") or [])
         if not replacement:
             replacement = ["先完成关键验证，再按证据更新上线动作。"]
+        # 应用重写规则
         replacement = [self._rewrite_line(item, request.message) for item in replacement]
+
+        # 调用支持服务实际进行改写并生成新报告版本
         result = self.report_support.support(
             report.report_id,
             ReportSupportRequest(
@@ -438,7 +524,12 @@ class CustomerServiceAgentService:
         request: CustomerServiceMessageRequest,
         conversation_id: str,
     ) -> CustomerServiceMessageResponse:
+        """
+        处理“产品定位修改”意图。
+        只提取产品定位相关的修改指令，并将其追加到现有定位描述中，生成新的报告版本。
+        """
         direction = self._extract_positioning_direction(request.message)
+        # 如果无法明确方向，则要求澄清
         if direction is None:
             return self._handle_targeted_clarification(
                 report,
@@ -447,6 +538,7 @@ class CustomerServiceAgentService:
                 question="你希望新的产品定位更偏高端、性价比，还是功能专业型？",
                 summary="请先告诉我你想强调的定位方向，我再生成下一版报告。",
             )
+        # 使用统一的方法更新单一策略字段
         return self._handle_single_strategy_field_update(
             report,
             request,
@@ -470,6 +562,10 @@ class CustomerServiceAgentService:
         request: CustomerServiceMessageRequest,
         conversation_id: str,
     ) -> CustomerServiceMessageResponse:
+        """
+        处理“营销文案修改”意图。
+        定向调整营销文案内容而不影响整体结构。
+        """
         direction = self._extract_marketing_copy_direction(request.message)
         if direction is None:
             return self._handle_targeted_clarification(
@@ -505,6 +601,10 @@ class CustomerServiceAgentService:
         request: CustomerServiceMessageRequest,
         conversation_id: str,
     ) -> CustomerServiceMessageResponse:
+        """
+        处理“推广策略修改”意图。
+        定向调整推广渠道与策略。
+        """
         direction = self._extract_promotion_direction(request.message)
         if direction is None:
             return self._handle_targeted_clarification(
@@ -540,12 +640,20 @@ class CustomerServiceAgentService:
         request: CustomerServiceMessageRequest,
         conversation_id: str,
     ) -> CustomerServiceMessageResponse:
+        """
+        处理“定向策略重组”意图（通常由于受众群体变化引起）。
+        当用户提出改变目标客群时，这会联动更新定位、文案、渠道和行动等多个模块。
+        这是一个较重的操作，涉及复制报告，整体替换多个关键字段内容，并生成新版本报告。
+        """
         latest = self.reports.get_latest_report(report.run_id)
+        # 提取目标受众
         audience = self._extract_audience(request.message)
+        # 获取匹配的受众规则集
         rules = self._audience_rules(audience)
         sections = deepcopy(latest.sections)
         changed_section_ids: list[str] = []
 
+        # 处理 "launch_marketing_strategy" 营销策略区块
         strategy = deepcopy(sections.get("launch_marketing_strategy") or {})
         strategy_evidence_ids = self._section_evidence_ids(strategy)
         if not strategy_evidence_ids:
@@ -555,6 +663,7 @@ class CustomerServiceAgentService:
                 422,
             )
         if strategy:
+            # 根据规则全面覆盖相关字段
             strategy["target_segments"] = [str(rules["audience_label"])]
             strategy["positioning"] = str(rules["positioning"])
             strategy["messaging_strategy"] = self._merge_rule_value(
@@ -570,6 +679,7 @@ class CustomerServiceAgentService:
                 list(rules["launch_actions"]),
             )
             strategy["customer_service_persona_focus"] = str(rules["persona_summary"])
+            # 记录调整的追踪信息
             strategy["customer_service_adjustment"] = {
                 "request": request.message,
                 "audience_label": str(rules["audience_label"]),
@@ -585,6 +695,7 @@ class CustomerServiceAgentService:
             sections["launch_marketing_strategy"] = strategy
             changed_section_ids.append("launch-marketing-strategy")
 
+        # 处理 "peer_market_user_insights" 洞察区块
         insights = deepcopy(sections.get("peer_market_user_insights"))
         if insights is not None:
             sections["peer_market_user_insights"] = self._merge_rule_value(
@@ -593,6 +704,7 @@ class CustomerServiceAgentService:
             )
             changed_section_ids.append("peer-market-user-insights")
 
+        # 处理 "data_supported_conclusions" 结论区块
         conclusions = deepcopy(sections.get("data_supported_conclusions") or [])
         sections["data_supported_conclusions"] = self._augment_list(
             conclusions,
@@ -606,16 +718,19 @@ class CustomerServiceAgentService:
         )
         changed_section_ids.append("data-supported-conclusions")
 
+        # 处理 "next_actions" 下一步行动区块
         actions = deepcopy(sections.get("next_actions") or [])
         sections["next_actions"] = self._replace_or_extend_list(actions, list(rules["next_actions"]))
         changed_section_ids.append("next-actions")
 
+        # 创建新版本的报告快照
         updated = self._new_snapshot(
             source=latest.model_copy(update={"sections": sections}),
             version=latest.version + 1,
             parent_report_id=latest.report_id,
             changed_section_ids=changed_section_ids,
         )
+        # 将新报告写入文件系统并持久化到数据库
         self._write(updated)
         self.reports.save_report_version(
             updated,
@@ -634,6 +749,8 @@ class CustomerServiceAgentService:
                 "evidence_ids": strategy_evidence_ids,
             },
         )
+
+        # 构建客服回复和对话记录
         summary = self._change_summary_for_rules(rules)
         reply = self._style_reply(
             request.personality,
@@ -693,10 +810,15 @@ class CustomerServiceAgentService:
         reply_summary: str,
         update_field,
     ) -> CustomerServiceMessageResponse:
+        """
+        单一策略字段更新的通用模板方法。
+        被用在局部修改定位、文案、推广策略时，抽象出重复逻辑。
+        """
         latest = self.reports.get_latest_report(report.run_id)
         sections = deepcopy(latest.sections)
         strategy = deepcopy(sections.get("launch_marketing_strategy") or {})
         strategy_evidence_ids = self._section_evidence_ids(strategy)
+        # 强制要求需要有既有证据支持
         if not strategy or not strategy_evidence_ids:
             raise TradePilotError(
                 ErrorCode.VALIDATION_ERROR,
@@ -704,7 +826,10 @@ class CustomerServiceAgentService:
                 422,
             )
 
+        # 执行回调函数更新具体字段内容
         update_field(strategy, self._extract_requested_direction(request.message) or request.message)
+
+        # 记录本次局部调整的元数据
         adjustment = dict(strategy.get("customer_service_adjustment") or {})
         adjustment.update(
             {
@@ -720,6 +845,7 @@ class CustomerServiceAgentService:
         sections["launch_marketing_strategy"] = strategy
         changed_section_ids = ["launch-marketing-strategy"]
 
+        # 生成新报告版本并保存
         updated = self._new_snapshot(
             source=latest.model_copy(update={"sections": sections}),
             version=latest.version + 1,
@@ -779,6 +905,10 @@ class CustomerServiceAgentService:
         question: str,
         summary: str,
     ) -> CustomerServiceMessageResponse:
+        """
+        处理需要针对某个具体领域进行澄清的情况。
+        与 _handle_clarification 类似，但更具针对性。
+        """
         pending_questions = [question]
         reply = self._style_reply(
             request.personality,
@@ -829,12 +959,17 @@ class CustomerServiceAgentService:
         latest_report_version: int,
         confirmed_requirements: list[str] | None = None,
     ) -> None:
+        """
+        记录对话历史到数据库。
+        保存用户的请求和系统的回复，并附带相应的操作元数据。
+        """
         base_metadata = {
             "kind": "customer_service",
             "run_id": report.run_id,
             "report_id": report.report_id,
             "personality": request.personality.value,
         }
+        # 添加用户消息
         self.conversations.add_message(
             conversation_id,
             role="user",
@@ -846,6 +981,7 @@ class CustomerServiceAgentService:
             },
             conversation_metadata=base_metadata,
         )
+        # 添加助手(系统)消息
         self.conversations.add_message(
             conversation_id,
             role="assistant",
@@ -860,6 +996,7 @@ class CustomerServiceAgentService:
                 "result_report_version": latest_report_version,
             },
         )
+        # 更新会话级元数据
         self._merge_metadata(
             conversation_id,
             report=report,
@@ -889,6 +1026,9 @@ class CustomerServiceAgentService:
         changed_section_ids: list[str] | None = None,
         confirmed_requirements: list[str] | None = None,
     ) -> None:
+        """
+        合并和更新会话的元数据，记录报告版本演进、需求确认列表及修改历史等。
+        """
         current = self.conversations.get(conversation_id)
         metadata = dict(current["metadata"])
         history = list(metadata.get("modification_history", []))
@@ -901,6 +1041,7 @@ class CustomerServiceAgentService:
                     "change_summary": summary,
                 }
             )
+        # 合并已确认的需求（去重）
         merged_requirements = list(
             dict.fromkeys([*metadata.get("confirmed_requirements", []), *(confirmed_requirements or [])])
         )
@@ -923,6 +1064,10 @@ class CustomerServiceAgentService:
 
     @staticmethod
     def _pick_section_id(report: FinalReport, message: str, *, default: str) -> str:
+        """
+        根据用户输入的内容关键词，启发式选择报告中的相关区块 ID。
+        主要用于“解释说明”功能中缩小上下文范围。
+        """
         if "注意事项" in message:
             return "prelaunch-considerations"
         if "假设" in message:
@@ -935,6 +1080,10 @@ class CustomerServiceAgentService:
 
     @staticmethod
     def _extract_audience(message: str) -> str:
+        """
+        从用户文本中提取并识别目标受众群体。
+        支持正则匹配以及硬编码关键词检查。
+        """
         match = AUDIENCE_PATTERN.search(message)
         if match:
             return match.group(1).strip()
@@ -950,6 +1099,7 @@ class CustomerServiceAgentService:
 
     @staticmethod
     def _extract_positioning_direction(message: str) -> str | None:
+        """从输入中提取定位调整的方向关键词。"""
         return CustomerServiceAgentService._extract_pattern_value(
             message,
             POSITIONING_DIRECTION_PATTERN,
@@ -958,6 +1108,7 @@ class CustomerServiceAgentService:
 
     @staticmethod
     def _extract_marketing_copy_direction(message: str) -> str | None:
+        """从输入中提取营销文案调整的方向关键词。"""
         return CustomerServiceAgentService._extract_pattern_value(
             message,
             MARKETING_COPY_DIRECTION_PATTERN,
@@ -966,6 +1117,7 @@ class CustomerServiceAgentService:
 
     @staticmethod
     def _extract_promotion_direction(message: str) -> str | None:
+        """从输入中提取推广策略调整的方向关键词。"""
         return CustomerServiceAgentService._extract_pattern_value(
             message,
             PROMOTION_DIRECTION_PATTERN,
@@ -974,6 +1126,7 @@ class CustomerServiceAgentService:
 
     @staticmethod
     def _extract_requested_direction(message: str) -> str | None:
+        """综合提取可能存在的各种调整方向。"""
         return (
             CustomerServiceAgentService._extract_positioning_direction(message)
             or CustomerServiceAgentService._extract_marketing_copy_direction(message)
@@ -987,6 +1140,9 @@ class CustomerServiceAgentService:
         *,
         fallback_tokens: tuple[str, ...],
     ) -> str | None:
+        """
+        通用的正则匹配与备用关键词提取辅助方法。
+        """
         match = pattern.search(message)
         if match:
             return match.group(1).strip()
@@ -997,6 +1153,7 @@ class CustomerServiceAgentService:
 
     @staticmethod
     def _has_audience_signal(message: str) -> bool:
+        """判断是否包含修改目标受众的信号。"""
         return bool(AUDIENCE_PATTERN.search(message)) or any(
             token in message
             for token in (
@@ -1015,18 +1172,25 @@ class CustomerServiceAgentService:
 
     @staticmethod
     def _has_positioning_signal(message: str) -> bool:
+        """判断是否包含修改产品定位的信号。"""
         return "定位" in message
 
     @staticmethod
     def _has_marketing_copy_signal(message: str) -> bool:
+        """判断是否包含修改营销文案的信号。"""
         return any(token in message for token in ("营销文案", "文案")) and "目标用户" not in message
 
     @staticmethod
     def _has_promotion_signal(message: str) -> bool:
+        """判断是否包含修改推广策略的信号。"""
         return any(token in message for token in ("推广策略", "渠道策略", "投放策略", "推广渠道", "投放渠道"))
 
     @staticmethod
     def _audience_rules(audience: str) -> dict[str, object]:
+        """
+        根据识别出的目标受众，返回对应的策略规则字典。
+        若属于预设受众，则直接返回内置模板；否则动态生成一套通用的替换规则。
+        """
         if STUDENT_AUDIENCE_KEYWORD in audience:
             return dict(STUDENT_AUDIENCE_RULES)
         if (
@@ -1044,6 +1208,8 @@ class CustomerServiceAgentService:
             or audience == MULTI_PET_AUDIENCE_RULES["audience_label"]
         ):
             return dict(MULTI_PET_AUDIENCE_RULES)
+
+        # 动态生成通用规则
         return {
             "audience_label": audience,
             "persona_summary": f"当前版本新增面向{audience}的人群视角。",
@@ -1064,6 +1230,9 @@ class CustomerServiceAgentService:
 
     @staticmethod
     def _change_summary_for_rules(rules: dict[str, object]) -> list[str]:
+        """
+        根据应用的受众规则，生成供用户查看的修改摘要（变更列表）。
+        """
         audience_label = str(rules["audience_label"])
         if audience_label == STUDENT_AUDIENCE_RULES["audience_label"]:
             return [
@@ -1107,6 +1276,9 @@ class CustomerServiceAgentService:
         base: str,
         summary: str,
     ) -> str:
+        """
+        根据预设的客服人格风格（简单、专业、陪伴、拓展），拼装回复话术。
+        """
         if personality is CustomerServicePersonality.SIMPLE:
             return f"{base}{summary}"
         if personality is CustomerServicePersonality.PROFESSIONAL:
@@ -1117,6 +1289,7 @@ class CustomerServiceAgentService:
 
     @staticmethod
     def _append_text(value: object, addition: str) -> str:
+        """辅助方法：在现有文本末尾追加内容。"""
         text = str(value or "").strip()
         if not text:
             return addition
@@ -1124,12 +1297,16 @@ class CustomerServiceAgentService:
 
     @staticmethod
     def _augment_list(value: object, additions: list[object]) -> list[object]:
+        """辅助方法：将新元素追加到列表中。"""
         items = list(value) if isinstance(value, list) else ([] if value is None else [value])
         items.extend(additions)
         return items
 
     @staticmethod
     def _replace_or_extend_list(value: object, additions: list[object]) -> list[object]:
+        """
+        辅助方法：合并两个列表并进行去重（针对 JSON 序列化后的字符串去重）。
+        """
         items = list(value) if isinstance(value, list) else ([] if value is None else [value])
         result: list[object] = []
         seen: set[str] = set()
@@ -1143,6 +1320,9 @@ class CustomerServiceAgentService:
 
     @staticmethod
     def _merge_rule_value(value: object, lines: list[str]) -> object:
+        """
+        辅助方法：将文本行合并到各种可能类型（列表、字典、字符串）的值中。
+        """
         if isinstance(value, list):
             result: list[str] = []
             seen: set[str] = set()
@@ -1161,6 +1341,10 @@ class CustomerServiceAgentService:
 
     @staticmethod
     def _section_evidence_ids(value: object) -> list[str]:
+        """
+        递归遍历数据结构，提取所有证据 ID (evidence_ids 或 evidence_id)，
+        主要用于确保生成的报告变更能够溯源到原始证据。
+        """
         found: list[str] = []
         if isinstance(value, dict):
             for key, item in value.items():
@@ -1178,6 +1362,10 @@ class CustomerServiceAgentService:
 
     @staticmethod
     def _rewrite_line(value: object, request_text: str) -> str:
+        """
+        基于简单的规则模式，对文本进行局部润色修改。
+        （此处的处理较为简单硬编码，实际可结合 LLM 服务进一步增强）。
+        """
         text = str(value)
         if "更通俗" in request_text or "简单易懂" in request_text:
             return f"{text}，表述更直接，方便快速执行。"
@@ -1197,6 +1385,10 @@ class CustomerServiceAgentService:
         parent_report_id: str,
         changed_section_ids: list[str],
     ) -> FinalReport:
+        """
+        基于现有的报告生成一个新的快照版本。
+        分配新的 report_id、版本号，更新文件路径等元数据。
+        """
         report_id = str(uuid4())
         directory = Path(source.json_path).parent
         return source.model_copy(
@@ -1213,10 +1405,15 @@ class CustomerServiceAgentService:
 
     @staticmethod
     def _write(report: FinalReport) -> None:
+        """
+        将报告数据同步写入到文件系统中，同时保存 JSON 和 Markdown 两种格式。
+        """
+        # 写入 JSON 格式数据
         Path(report.json_path).write_text(
             json.dumps(report.model_dump(mode="json"), ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+        # 调用报告导出器，生成并写入带有锚点的 Markdown 格式报告
         Path(report.markdown_path).write_text(
             ReportExporter._markdown_with_anchors(report),
             encoding="utf-8",

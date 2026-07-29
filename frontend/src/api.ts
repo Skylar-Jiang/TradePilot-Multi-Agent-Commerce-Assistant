@@ -1,3 +1,4 @@
+// 前端 API 类型与请求封装：保证页面调用后端时使用统一的数据契约。
 export type DataMode = 'demo' | 'real'
 export type RunStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'manual_review'
 export type StageStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped'

@@ -1,3 +1,4 @@
+# 报告导出服务：将结构化分析结果渲染为可下载的 Markdown/HTML 文档。
 import html
 import json
 import re

@@ -1,3 +1,4 @@
+# 报告领域模型：定义报告、证据和审校结果在接口中的结构。
 from datetime import datetime
 from typing import Any, Literal
 

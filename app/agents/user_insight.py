@@ -1,3 +1,4 @@
+# 用户洞察 Agent：从商品信息和市场约束中提炼目标用户及需求。
 from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel

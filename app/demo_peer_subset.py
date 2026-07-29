@@ -434,3 +434,4 @@ def _load_manifest(path: Path) -> dict[str, object]:
 
 def _collection_counts(store: ChromaKnowledgeStore) -> dict[str, int]:
     return {name: int(item["count"]) for name, item in store.status().items()}
+# 演示数据脚本：构造小规模同类商品样本，便于本地联调和课堂演示。

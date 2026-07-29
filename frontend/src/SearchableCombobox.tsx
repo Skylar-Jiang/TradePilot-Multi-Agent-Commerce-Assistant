@@ -1,3 +1,4 @@
+// 可搜索下拉框：支持键盘导航、筛选和自定义输入，复用于商品与市场字段。
 import { CaretDown, Check, MagnifyingGlass } from '@phosphor-icons/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FocusEvent, KeyboardEvent, ReactNode } from 'react'
